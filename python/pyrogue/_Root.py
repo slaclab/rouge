@@ -61,7 +61,7 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
         """Root exit."""
         self.stop()
 
-    def __init__(self, *, name=None, description=''):
+    def __init__(self, *, name=None, description='', expand=True):
         """Init the node with passed attributes"""
 
         rogue.interfaces.stream.Master.__init__(self)
@@ -93,7 +93,7 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
         self._updateThread = None
 
         # Init 
-        pr.Device.__init__(self, name=name, description=description)
+        pr.Device.__init__(self, name=name, description=description, expand=expand)
 
         # Variables
         self.add(pr.LocalVariable(name='SystemLog', value='', mode='RO', hidden=True,
@@ -147,10 +147,12 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
         self.add(pr.LocalCommand(name='SetYamlConfig', value='', function=lambda arg: self._setYaml(arg,False,['RW','WO']), hidden=True,
                                  description='Set configuration from passed YAML string'))
 
-        self.add(pr.LocalCommand(name='GetYamlConfig', value=True, function=lambda arg: self._getYaml(arg,['RW','WO']), hidden=True,
+        self.add(pr.LocalCommand(name='GetYamlConfig', value=True, retValue='',
+                                 function=lambda arg: self._getYaml(arg,['RW','WO']), hidden=True,
                                  description='Get current configuration as YAML string. Pass read first arg.'))
 
-        self.add(pr.LocalCommand(name='GetYamlState', value=True, function=lambda arg: self._getYaml(arg,['RW','RO','WO']), hidden=True,
+        self.add(pr.LocalCommand(name='GetYamlState', value=True, retValue='',
+                                 function=lambda arg: self._getYaml(arg,['RW','RO','WO']), hidden=True,
                                  description='Get current state as YAML string. Pass read first arg.'))
 
         self.add(pr.LocalCommand(name='Restart', function=self._restart, hidden=False,
@@ -159,7 +161,7 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
         self.add(pr.LocalCommand(name='Exit', function=self._exit, hidden=False,
                                  description='Exit the server application'))
 
-    def start(self, timeout=1.0, initRead=False, initWrite=False, pollEn=True, zmqPort=9099):
+    def start(self, timeout=1.0, initRead=False, initWrite=False, pollEn=True, zmqPort=None):
         """Setup the tree. Start the polling thread."""
 
         if self._running:
@@ -254,7 +256,7 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
     def addVarListener(self,func):
         """
         Add a variable update listener function.
-        The variable, value and display string will be passed as an arg: func(path,value,disp)
+        The variable and value structure will be passed as args: func(path,varValue)
         """
         with self._varListenLock:
             self._varListeners.append(func)
@@ -308,6 +310,7 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
             # After with is done
             self._updateQueue.put(False)
 
+    @pr.expose
     def waitOnUpdate(self):
         """
         Wait until all update queue items have been processed.
@@ -556,7 +559,7 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
                         # Call listener functions,
                         with self._varListenLock:
                             for func in self._varListeners:
-                                func(p,val.value.val,valueDisp)
+                                func(p,val)
                     except Exception as e:
                         self._log.exception(e)
                         
