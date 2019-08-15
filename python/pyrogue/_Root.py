@@ -453,6 +453,8 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
 
     def _loadConfig(self,arg):
         """Load YAML configuration from a file. Called from command"""
+        poll = self.PollEn.get()
+        self.PollEn.set(False)
         try:
             with open(arg,'r') as f:
                 self._setYaml(f.read(),False,['RW','WO'])
@@ -460,6 +462,7 @@ class Root(rogue.interfaces.stream.Master,pr.Device):
             self._log.exception(e)
             return False
 
+        self.PollEn.set(poll)
         return True
 
     def _getYaml(self,readFirst,modes=['RW'],varEncode=True):
