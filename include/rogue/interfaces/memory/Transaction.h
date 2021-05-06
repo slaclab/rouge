@@ -8,12 +8,12 @@
  * Description:
  * Memory Transaction
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -25,8 +25,11 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <rogue/EnableSharedFromThis.h>
+#include <rogue/Logging.h>
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 #endif
 
@@ -39,19 +42,19 @@ namespace rogue {
          class Hub;
 
          //! Transaction Container
-         /** The Transaction is passed between the Master and Slave to initiate a transaction. 
-          * The Transaction class contains information about the transaction as well as the 
-          * transaction data pointer. Each created transaction object has a unique 32-bit 
+         /** The Transaction is passed between the Master and Slave to initiate a transaction.
+          * The Transaction class contains information about the transaction as well as the
+          * transaction data pointer. Each created transaction object has a unique 32-bit
           * transaction ID which is used to track the transaction. Transactions are never
           * created directly, instead they are created in the Master() class.
-          */ 
-         class Transaction : public std::enable_shared_from_this<rogue::interfaces::memory::Transaction> {
+          */
+         class Transaction : public rogue::EnableSharedFromThis<rogue::interfaces::memory::Transaction> {
             friend class TransactionLock;
             friend class Master;
             friend class Hub;
 
-            public: 
-               
+            public:
+
                //! Alias for using uint8_t * as Transaction::iterator
                typedef uint8_t * iterator;
 
@@ -68,7 +71,7 @@ namespace rogue {
 
             protected:
 
-               // Transaction timeout 
+               // Transaction timeout
                struct timeval timeout_;
 
                // Transaction end time
@@ -76,6 +79,9 @@ namespace rogue {
 
                // Transaction start time
                struct timeval startTime_;
+
+               // Transaction warn time
+               struct timeval warnTime_;
 
 #ifndef NO_PYTHON
                // Transaction python buffer
@@ -98,7 +104,7 @@ namespace rogue {
                uint32_t type_;
 
                // Transaction error
-               uint32_t error_;
+               std::string error_;
 
                // Transaction id
                uint32_t id_;
@@ -109,11 +115,14 @@ namespace rogue {
                // Transaction lock
                std::mutex lock_;
 
+               //! Log
+               std::shared_ptr<rogue::Logging> log_;
+
                // Create a transaction container and return a TransactionPtr, called by Master
                static std::shared_ptr<rogue::interfaces::memory::Transaction> create (struct timeval timeout);
 
                // Wait for the transaction to complete, called by Master
-               uint32_t wait();
+               std::string wait();
 
             public:
 
@@ -134,7 +143,7 @@ namespace rogue {
 
                //! Get expired flag
                /** The expired flag is set by the Master when the Transaction times out
-                * and the Master is no longer wiating for the Transaction to complete.
+                * and the Master is no longer waiting for the Transaction to complete.
                 * Lock must be held before checking the expired status.
                 *
                 * Exposed as expired() to Python
@@ -169,7 +178,7 @@ namespace rogue {
 
                //! Refresh transaction timer
                /** Called to refresh the Transaction timer. If the passed reference
-                * Transaction is NULL or the Transaction start time is later than the 
+                * Transaction is NULL or the Transaction start time is later than the
                 * reference transaction, the Transaction timer will be refreshed.
                 *
                 * Not exposed to Python
@@ -177,14 +186,28 @@ namespace rogue {
                 */
                void refreshTimer(std::shared_ptr<rogue::interfaces::memory::Transaction> reference);
 
-               //! Complete transaction with passed error
+               //! Complete transaction without error
                /** Lock must be held before calling this method. The
                 * error types are defined in Constants.
                 *
-                * Exposted as done() to Python
-                * @param error Transaction error value or 0 for no error.
+                * Exposed as done() to Python
                 */
-               void done(uint32_t error);
+               void done();
+
+               //! Complete transaction with passed error, python interface
+               /** Lock must be held before calling this method.
+                *
+                * Exposed as error() to Python
+                * @param error Transaction error message
+                */
+               void errorPy(std::string error);
+
+               //! Complete transaction with passed error
+               /** Lock must be held before calling this method.
+                *
+                * @param error Transaction error message
+                */
+               void error(const char * fmt, ...);
 
                //! Get start iterator for Transaction data
                /** Not exposed to Python
@@ -207,7 +230,7 @@ namespace rogue {
 #ifndef NO_PYTHON
 
                //! Method for copying transaction data to Python byte array
-               /** Exposted to Python as getData()
+               /** Exposed to Python as getData()
                 *
                 * The size of the data to be copied is defined by the size of
                 * the passed data buffer.
@@ -217,7 +240,7 @@ namespace rogue {
                void getData ( boost::python::object p, uint32_t offset );
 
                //! Method for copying transaction data from Python byte array
-               /** Exposted to Python as setData()
+               /** Exposed to Python as setData()
                 *
                 * The size of the data to be copied is defined by the size of
                 * the passed data buffer.

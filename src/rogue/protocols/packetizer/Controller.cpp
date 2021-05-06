@@ -9,12 +9,12 @@
  * Description:
  * Packetizer Controller
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -25,6 +25,7 @@
 #include <rogue/protocols/packetizer/Transport.h>
 #include <rogue/protocols/packetizer/Application.h>
 #include <rogue/GeneralError.h>
+#include <rogue/Helpers.h>
 #include <memory>
 #include <rogue/GilRelease.h>
 #include <math.h>
@@ -61,10 +62,13 @@ rpp::Controller::Controller ( rpp::TransportPtr tran, rpp::ApplicationPtr * app,
 }
 
 //! Destructor
-rpp::Controller::~Controller() { }
+rpp::Controller::~Controller() {
+   this->stopQueue();
+}
 
 //! Stop TX
-void rpp::Controller::stopQueue() { 
+void rpp::Controller::stopQueue() {
+   rogue::GilRelease noGil;
    tranQueue_.stop();
 }
 
@@ -94,20 +98,21 @@ ris::FramePtr rpp::Controller::reqFrame ( uint32_t size ) {
       // Take only the first buffer. This will break a cascaded packetizer
       // system. We need to fix this!
       buff = *(rFrame->beginBuffer());
-  
+
       // Use buffer tail reservation to align available payload
       if (((buff->getAvailable()-tailSize_) % alignSize_) != 0)
-         buff->adjustTail((buff->getAvailable()-tailSize_) % alignSize_);  
-  
-      // Buffer should support our header/tail plus at least one payload byte 
+         buff->adjustTail((buff->getAvailable()-tailSize_) % alignSize_);
+
+      // Buffer should support our header/tail plus at least one payload byte
       if ( buff->getAvailable() < (headSize_ + tailSize_ + 1) )
-         throw(rogue::GeneralError::boundary("packetizer::Controller::reqFrame",
-                  (headSize_ + tailSize_ + 1), buff->getAvailable()));
+         throw(rogue::GeneralError::create("packetizer::Controller::reqFrame",
+                  "Buffer size %i is less than min size required %i",
+                  buff->getAvailable(), (headSize_ + tailSize_ + 1)));
 
       // Add 8 bytes to head and tail reservation
       buff->adjustHeader(headSize_);
       buff->adjustTail(tailSize_);
-      
+
       // Add buffer to return frame
       lFrame->appendBuffer(buff);
    }
@@ -137,6 +142,6 @@ uint32_t rpp::Controller::getDropCount() {
 void rpp::Controller::setTimeout(uint32_t timeout) {
    div_t divResult = div(timeout,1000000);
    timeout_.tv_sec  = divResult.quot;
-   timeout_.tv_usec = divResult.rem; 
+   timeout_.tv_usec = divResult.rem;
 }
 

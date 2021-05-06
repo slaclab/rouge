@@ -10,12 +10,12 @@
  * Description :
  *    SRP protocol bridge, Version 3
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -41,6 +41,7 @@ namespace rim = rogue::interfaces::memory;
 namespace ris = rogue::interfaces::stream;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 #endif
@@ -64,7 +65,7 @@ void rps::SrpV3::setup_python() {
 }
 
 //! Creator with version constant
-rps::SrpV3::SrpV3() : ris::Master(), ris::Slave(), rim::Slave(4,4096) { 
+rps::SrpV3::SrpV3() : ris::Master(), ris::Slave(), rim::Slave(4,4096) {
    log_ = rogue::Logging::create("SrpV3");
 }
 
@@ -84,7 +85,7 @@ bool rps::SrpV3::setupHeader(rim::TransactionPtr tran, uint32_t *header, uint32_
       case rim::Post  : header[0] |= 0x200; break;
       default: doWrite = false; break; // Read or verify
    }
-   
+
    // Bits 13:10 not used in gen frame
    // Bit 14 = ignore mem resp
    // Bit 23:15 = Unused
@@ -117,7 +118,7 @@ bool rps::SrpV3::setupHeader(rim::TransactionPtr tran, uint32_t *header, uint32_
 
 //! Post a transaction
 void rps::SrpV3::doTransaction(rim::TransactionPtr tran) {
-   ris::Frame::iterator fIter;
+   ris::FrameIterator fIter;
    rim::Transaction::iterator tIter;
    ris::FramePtr  frame;
    uint32_t frameSize;
@@ -126,13 +127,18 @@ void rps::SrpV3::doTransaction(rim::TransactionPtr tran) {
 
    // Size error
    if ((tran->address() % min()) != 0 ) {
-      tran->done(rim::AddressError);
+      tran->error("Transaction address 0x%x is not aligned to min size %i",tran->address(),min());
       return;
    }
 
    // Size error
-   if ((tran->size() % min()) != 0 || tran->size() < min() || tran->size() > max()) {
-      tran->done(rim::SizeError);
+   if ((tran->size() % min()) != 0 || tran->size() < min()) {
+      tran->error("Transaction size 0x%x is not aligned to min size %i",tran->size(),min());
+      return;
+   }
+
+   if (tran->size() > max()) {
+      tran->error("Transaction size 0x%x exceeds max size %i",tran->size(),min());
       return;
    }
 
@@ -146,7 +152,7 @@ void rps::SrpV3::doTransaction(rim::TransactionPtr tran) {
    // Setup iterators
    rogue::GilRelease noGil;
    rim::TransactionLockPtr lock = tran->lock();
-   fIter = frame->beginWrite();
+   fIter = frame->begin();
    tIter = tran->begin();
 
    // Write header
@@ -155,19 +161,20 @@ void rps::SrpV3::doTransaction(rim::TransactionPtr tran) {
    // Write data
    if ( doWrite ) ris::toFrame(fIter, tran->size(), tIter);
 
-   if ( tran->type() == rim::Post ) tran->done(0);
+   if ( tran->type() == rim::Post ) tran->done();
    else addTransaction(tran);
 
    log_->debug("Send frame for id=%i, addr 0x%0.8x. Size=%i, type=%i",
                tran->id(),tran->address(),tran->size(),tran->type());
    log_->debug("Send frame for id=%i, header: 0x%0.8x 0x%0.8x 0x%0.8x 0x%0.8x 0x%0.8x",
                tran->id(), header[0],header[1],header[2],header[3],header[4]);
+
    sendFrame(frame);
 }
 
 //! Accept a frame from master
 void rps::SrpV3::acceptFrame ( ris::FramePtr frame ) {
-   ris::Frame::iterator fIter;
+   ris::FrameIterator fIter;
    rim::Transaction::iterator tIter;
    rim::TransactionPtr tran;
    uint32_t header[HeadLen/4];
@@ -181,18 +188,23 @@ void rps::SrpV3::acceptFrame ( ris::FramePtr frame ) {
    rogue::GilRelease noGil;
    ris::FrameLockPtr frLock = frame->lock();
 
+   if ( frame->getError() ) {
+      log_->warning("Got errored frame = 0x%i",frame->getError());
+      return; // Invalid frame, drop it
+   }
+
    // Check frame size
    if ( (fSize = frame->getPayload()) < (HeadLen+TailLen) ) {
-      log_->warning("Got undersize frame size = %i",fSize);
+      log_->warning("Got undersized frame size = %i",fSize);
       return; // Invalid frame, drop it
    }
 
    // Get the tail
-   fIter = frame->endRead()-TailLen;
+   fIter = frame->end()-TailLen;
    ris::fromFrame(fIter,TailLen,tail);
 
    // Get the header
-   fIter = frame->beginRead();
+   fIter = frame->begin();
    ris::fromFrame(fIter,HeadLen,header);
 
    // Extract the id
@@ -211,7 +223,7 @@ void rps::SrpV3::acceptFrame ( ris::FramePtr frame ) {
 
    // Transaction expired
    if ( tran->expired() ) {
-      log_->warning("Transaction expired. Id=%i",id);
+      tran->error("Transaction expired: Id=%i (increase root->timeout value if this ID matches a previous timeout message)",id);
       return;
    }
    tIter = tran->begin();
@@ -224,15 +236,15 @@ void rps::SrpV3::acceptFrame ( ris::FramePtr frame ) {
          (header[1] != expHeader[1]) || (header[2] != expHeader[2]) ||
          (header[3] != expHeader[3]) || (header[4] != expHeader[4]) ) {
      log_->warning("Bad header for %i",id);
-     tran->done(rim::ProtocolError);
+     tran->error("Received SRPV3 message did not match expected protocol");
      return;
    }
 
    // Check tail
    if ( tail[0] != 0 ) {
-      if ( tail[0] & 0xFF) tran->done(rim::BusFail | (tail[0] & 0xFF));
-      else if ( tail[0] & 0x100 ) tran->done(rim::BusTimeout);
-      else tran->done(tail[0]);
+      if ( tail[0] & 0x2000 ) tran->error("FPGA register bus lockup detected in hardware. Power cycle required.");
+      else if ( tail[0] & 0x0100 ) tran->error("FPGA register bus timeout detected in hardware");
+      else tran->error("Non zero status message returned on fpga register bus in hardware: 0x%x",tail[0]);
       log_->warning("Error detected for ID id=%i, tail=0x%0.8x",id,tail[0]);
       return;
    }
@@ -240,13 +252,13 @@ void rps::SrpV3::acceptFrame ( ris::FramePtr frame ) {
    // Verify frame size, drop frame
    if ( (fSize != expFrameLen) || (header[4]+1) != tran->size() ) {
       log_->warning("Size mismatch id=%i. fsize=%i, exp=%i, tsize=%i, header=%i",id, fSize, expFrameLen, tran->size(),header[4]+1);
-      tran->done(rim::ProtocolError);
+      tran->error("Received SRPV3 message had a header size mismatch");
       return;
    }
 
    // Copy data if read
    if ( ! doWrite ) ris::fromFrame(fIter, tran->size(), tIter);
 
-   tran->done(0);
+   tran->done();
 }
 

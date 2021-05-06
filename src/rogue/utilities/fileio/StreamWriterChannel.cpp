@@ -12,12 +12,12 @@
  *    slave is associated with a tag. The tag is included in the bank header
  *    of each write.
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -35,6 +35,7 @@ namespace ris = rogue::interfaces::stream;
 namespace ruf = rogue::utilities::fileio;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp = boost::python;
 #endif
@@ -73,13 +74,14 @@ void ruf::StreamWriterChannel::acceptFrame ( ris::FramePtr frame ) {
 
    rogue::GilRelease noGil;
    ris::FrameLockPtr fLock = frame->lock();
-   std::unique_lock<std::mutex> lock(mtx_);
 
    // Support for channelized traffic
    if ( channel_ == 0 ) ichan = frame->getChannel();
    else ichan = channel_;
 
    writer_->writeFile (ichan, frame);
+
+   std::unique_lock<std::mutex> lock(mtx_);
    frameCount_++;
    cond_.notify_all();
 }
@@ -108,7 +110,7 @@ bool ruf::StreamWriterChannel::waitFrameCount(uint32_t count, uint64_t timeout) 
 
       div_t divResult = div(timeout,1000000);
       sumTime.tv_sec  = divResult.quot;
-      sumTime.tv_usec = divResult.rem;       
+      sumTime.tv_usec = divResult.rem;
 
       timeradd(&curTime,&sumTime,&endTime);
    }
@@ -118,10 +120,10 @@ bool ruf::StreamWriterChannel::waitFrameCount(uint32_t count, uint64_t timeout) 
 
       if ( timeout != 0 ) {
          gettimeofday(&curTime,NULL);
-         if ( timercmp(&curTime,&endTime,>) ) return false;
+         if ( timercmp(&curTime,&endTime,>) ) break;
       }
    }
 
-   return true;
+   return (frameCount_ >= count);
 }
 

@@ -1,47 +1,56 @@
-package: 
+package:
   name: rogue
-  version: {{ GIT_DESCRIBE_TAG }}
+  version: {{ environ.get('GIT_DESCRIBE_TAG') }}
 
 source:
    path: ..
 
 build:
-   number: {{ GIT_DESCRIBE_NUMBER|int }}
+   number: {{ environ.get('GIT_DESCRIBE_NUMBER',0) }}
 
 requirements:
    build:
-     - python
-     - gcc_linux-64   [linux]
-     - gxx_linux-64   [linux]
-     - clang_osx-64   [osx]
-     - clangxx_osx-64 [osx]
+     - python<3.8
      - boost
+     - {{ compiler('c') }}
+     - {{ compiler('cxx') }}
+     - git
      - cmake
      - make
      - bzip2
      - zeromq
-     - epics-base=3.14.12.8
-     - git
-
+     - epics-base
+     - pcas
+     - numpy
+   host:
+     - python<3.8
+     - boost
+     - bzip2
+     - zeromq
+     - epics-base
+     - pcas
+     - numpy
    run:
-     - python
-     - git
-     - git-lfs
-     - ipython
+     - python<3.8
+     - {{ pin_compatible('boost', min_pin='x.x', max_pin='x.x')}}
      - boost
-     - cmake
-     - make
      - bzip2
-     - epics-base=3.14.12.8
      - zeromq
+     - epics-base
+     - pcas
+     - numpy
+     - ipython
+     - p4p
      - pyyaml
      - jsonpickle
      - pyzmq
      - parse
      - click
-     - numpy
      - pyqt
      - pyepics
+     - sqlalchemy
+     - pydm
+     - pyserial
 
 about:
    home: https://github.com/slaclab/rogue

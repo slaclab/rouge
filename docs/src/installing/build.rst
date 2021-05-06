@@ -5,7 +5,7 @@ Building Rogue From Source
 ==========================
 
 The following instructions demonstrate how to build rogue outside of the anaconda environment. These
-instructions are only relevant for the Linux operating system. See :ref:`installing_anaconda` or 
+instructions are only relevant for the Linux and MacOS operating systems. See :ref:`installing_anaconda` or
 :ref:`installing_docker` for Windows and MacOS.
 
 Installing Packages Required For Rogue
@@ -21,20 +21,23 @@ The following packages are required to build the rogue library:
 Package Manager Install
 -----------------------
 
-To add these packages on Ubuntu 17.04 (or later):
+Ubuntu 18.04 (or later)
+########################
 
 .. code::
 
-   $ apt-get install cmake (or cmake3)
+   $ apt-get install cmake
    $ apt-get install python3
    $ apt-get install libboost-all-dev
    $ apt-get install libbz2-dev
    $ apt-get install python3-pip
    $ apt-get install git
    $ apt-get install libzmq3-dev
-   $ apt-get install python3-pyqt5 (or python3-pyqt4)
+   $ apt-get install python3-pyqt5
+   $ apt-get install python3-pyqt5.qtsvg
 
-To add these packages on archlinux:
+archlinux:
+##########
 
 .. code::
 
@@ -45,26 +48,26 @@ To add these packages on archlinux:
    $ pacman -S python-pip
    $ pacman -S git
    $ pacman -S zeromq
-   $ pacman -S python-pyqt5 (or python-pyqt4)
+   $ pacman -S python-pyqt5
 
-Epics V3 support is and optional module that will be included in the rogue build
-if the EPICS_BASE directory is set in the user's environment.
+MacOs:
+#######
 
-Python Packages Required
-------------------------
-
-The following python packages are required to use rogue in the python3
-environment. Currently I am using PIP to install these, but you are free 
-to use your favorite python tool.
+Information on the homebrew package manager can be found at: `<https://brew.sh/>`_
 
 .. code::
 
-   $ pip3 install PyYAML
-   $ pip3 install Pyro4 
-   $ pip3 install parse
-   $ pip3 install click
-   $ pip3 install pyzmq
-   $ pip3 install numpy
+   $ brew install cmake
+   $ brew install python3
+   $ brew install boost
+   $ brew install bzip2
+   $ brew install python-pip
+   $ brew install git
+   $ brew install zeromq
+   $ brew install pyqt5
+
+Epics V3 support is and optional module that will be included in the rogue build
+if the EPICS_BASE directory is set in the user's environment.
 
 Building & Installing Rogue
 ===========================
@@ -87,6 +90,7 @@ Local Install
 
    $ git clone https://github.com/slaclab/rogue.git
    $ cd rogue
+   $ pip3 install -r pip_requirements.txt
    $ mkdir build
    $ cd build
    $ cmake .. -DROGUE_INSTALL=local
@@ -103,6 +107,7 @@ Make sure you have permission to install into the passed install directory, if n
 
    $ git clone https://github.com/slaclab/rogue.git
    $ cd rogue
+   $ pip3 install -r pip_requirements.txt
    $ mkdir build
    $ cd build
    $ cmake .. -DROGUE_INSTALL=custom -DROGUE_DIR=/path/to/custom/dir
@@ -120,6 +125,7 @@ Make sure you have permission to install into the /usr/local/ directory, if not 
 
    $ git clone https://github.com/slaclab/rogue.git
    $ cd rogue
+   $ pip3 install -r pip_requirements.txt
    $ mkdir build
    $ cd build
    $ cmake .. -DROGUE_INSTALL=system
@@ -139,4 +145,86 @@ to update from git and rebuild:
    $ make clean
    $ make install
 
+Cross-compiling Rogue
+=====================
 
+If you want to cross-compile rogue, first you need to have your cross-compilation toolchain setup. You also need to have cross-compiled version of all the dependencies with that toolchain.
+
+Then, you need to create a CMake toolchain file, where you have to manually point the CMake compiler variables to the path of your cross-compiler. Those variables are:
+
+.. code::
+
+   CMAKE_SYSTEM_NAME
+   CMAKE_SYSTEM_PROCESSOR
+   CMAKE_C_COMPILER_AR
+   CMAKE_ASM_COMPILER
+   CMAKE_C_COMPILER
+   CMAKE_CXX_COMPILER
+   CMAKE_LINKER
+   CMAKE_OBJCOPY
+   CMAKE_C_COMPILER_RANLIB
+   CMAKE_SIZE
+   CMAKE_STRIP
+
+In this file you also need to point to the location of the cross-compile version of the dependencies by using these variables:
+
+.. code::
+
+   BZIP2_LIBRARIES
+   BZIP2_INCLUDE_DIR
+   ZeroMQ_LIBRARY
+   ZeroMQ_INCLUDE_DIR
+   PYTHON_LIBRARY
+   PYTHON_INCLUDE_DIR
+   BOOST_ROOT
+
+**Note:** for python you also need cross-compile version of its packages, like for example numpy.
+
+Once you have that file define, you pas that file to CMake with the option ``-CMAKE_TOOLCHAIN_FILE=<file_name>``.
+
+Example
+-------
+
+To cross-compile rogue at SLAC using our internal ``buildroot`` toolchain, we defined the following toolchain file, called ``buildroot-2019.08-x86_64.cmake``
+
+.. code::
+
+   set(CMAKE_SYSTEM_NAME               Generic)
+   set(CMAKE_SYSTEM_PROCESSOR          x86_64)
+
+   set(CMAKE_C_COMPILER_AR     /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-ar)
+   set(CMAKE_ASM_COMPILER      /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-gcc)
+   set(CMAKE_C_COMPILER        /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-gcc)
+   set(CMAKE_CXX_COMPILER      /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-g++)
+   set(CMAKE_LINKER            /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-ld)
+   set(CMAKE_OBJCOPY           /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-objcopy)
+   set(CMAKE_C_COMPILER_RANLIB /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-ranlib)
+   set(CMAKE_SIZE              /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-size)
+   set(CMAKE_STRIP             /afs/slac/package/linuxRT/buildroot-2019.08/host/linux-x86_64/x86_64/usr/bin/x86_64-linux-strip)
+
+   set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+   set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+   set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+   # Define location of BZIP2 (cross-compiled)
+   set(BZIP2_LIBRARIES   /afs/slac/g/lcls/package/bzip2/1.0.6/buildroot-2019.08-x86_64/lib/libbz2.a)
+   set(BZIP2_INCLUDE_DIR /afs/slac/g/lcls/package/bzip2/1.0.6/buildroot-2019.08-x86_64/include)
+
+   # Define  the location of ZMQ (cross-compiled)
+   set(ZeroMQ_LIBRARY     /afs/slac/g/lcls/package/libzmq/zeromq-4.3.4/buildroot-2019.08-x86_64/lib/libzmq.a)
+   set(ZeroMQ_INCLUDE_DIR /afs/slac/g/lcls/package/libzmq/zeromq-4.3.4/buildroot-2019.08-x86_64/include)
+
+   # Define the location of python3 (cross-compiled)
+   set(PYTHON_LIBRARY     /afs/slac/g/lcls/package/python/3.6.1/buildroot-2019.08-x86_64/lib/libpython3.6m.so)
+   set(PYTHON_INCLUDE_DIR /afs/slac/g/lcls/package/python/3.6.1/buildroot-2019.08-x86_64/include/python3.6m)
+
+   # Define the location of boost (cross-compiled)
+   set(BOOST_ROOT /afs/slac/g/lcls/package/boost/1.64.0/buildroot-2019.08-x86_64)
+
+Then we build rogue as described in the previous section, but adding the ``CMAKE_TOOLCHAIN_FILE`` variable when calling CMake:
+
+.. code::
+
+   cmake .. -DCMAKE_TOOLCHAIN_FILE=buildroot-2019.08-x86_64.cmake
+
+**Note:** you need to pass the correct path, either absolute or relative, of you toolchain file  to the ``CMAKE_TOOLCHAIN_FILE`` variable.

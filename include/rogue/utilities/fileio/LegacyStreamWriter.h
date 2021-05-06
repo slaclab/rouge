@@ -1,11 +1,6 @@
 /**
  *-----------------------------------------------------------------------------
  * Title         : Data file writer utility.
- * ----------------------------------------------------------------------------
- * File          : LegacyStreamWriter.h
- * Author        : Ryan Herbst <rherbst@slac.stanford.edu>
- * Created       : 09/28/2016
- * Last update   : 09/28/2016
  *-----------------------------------------------------------------------------
  * Description :
  *    Class to coordinate data file writing.
@@ -16,12 +11,12 @@
  *          [27:0]  = Size
  *
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -49,8 +44,8 @@ namespace rogue {
                virtual void writeFile ( uint8_t channel, std::shared_ptr<rogue::interfaces::stream::Frame> frame);
 
             public:
-               
-               // Data types. 
+
+               // Data types.
                // Count is n*32bits for type = 0, byte count for all others
                enum DataType {
                  RawData     = 0,
@@ -76,12 +71,12 @@ namespace rogue {
 
                //! Get a port
                std::shared_ptr<rogue::utilities::fileio::StreamWriterChannel> getDataChannel();
-               std::shared_ptr<rogue::utilities::fileio::StreamWriterChannel> getYamlChannel();               
+               std::shared_ptr<rogue::utilities::fileio::StreamWriterChannel> getYamlChannel();
 
-            
+
          };
 
-         // Convienence
+         // Convenience
          typedef std::shared_ptr<rogue::utilities::fileio::LegacyStreamWriter> LegacyStreamWriterPtr;
       }
    }

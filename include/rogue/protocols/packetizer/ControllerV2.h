@@ -8,12 +8,12 @@
  * Description:
  * Packetizer Controller, Version 2
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <rogue/Queue.h>
 #include <rogue/Logging.h>
+#include <rogue/EnableSharedFromThis.h>
 
 namespace rogue {
    namespace protocols {
@@ -36,7 +37,7 @@ namespace rogue {
          class Header;
 
          //! Packetizer Controller Class
-         class ControllerV2 : public Controller, public std::enable_shared_from_this<rogue::protocols::packetizer::ControllerV2> {
+         class ControllerV2 : public Controller, public rogue::EnableSharedFromThis<rogue::protocols::packetizer::ControllerV2> {
 
                bool     enIbCrc_;
                bool     enObCrc_;
@@ -44,7 +45,7 @@ namespace rogue {
             public:
 
                //! Class creation
-               static std::shared_ptr<rogue::protocols::packetizer::ControllerV2> 
+               static std::shared_ptr<rogue::protocols::packetizer::ControllerV2>
                   create ( bool enIbCrc, bool enObCrc, bool enSsi,
                            std::shared_ptr<rogue::protocols::packetizer::Transport> tran,
                            std::shared_ptr<rogue::protocols::packetizer::Application> * app );

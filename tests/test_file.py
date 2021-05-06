@@ -2,23 +2,18 @@
 #-----------------------------------------------------------------------------
 # Title      : File read and write test
 #-----------------------------------------------------------------------------
-# File       : test_file.py
-# Author     : Ryan Herbst, rherbst@slac.stanford.edu
-# Created    : 2016-09-29
-# Last update: 2016-09-29
-#-----------------------------------------------------------------------------
 # Description:
 # File read and write test
 #-----------------------------------------------------------------------------
-# This file is part of the rogue_example software. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue_example software, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue_example software. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue_example software, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
-import rogue.utilities 
+import rogue.utilities
 import rogue.utilities.fileio
 import pyrogue
 import time
@@ -45,9 +40,8 @@ def write_files():
 
     comp = rogue.utilities.StreamZip()
 
-    pyrogue.streamConnect(prbs,fwrU.getChannel(0))
-    pyrogue.streamTap(prbs,comp)
-    pyrogue.streamConnect(comp,fwrC.getChannel(0))
+    prbs >> fwrU.getChannel(0)
+    prbs >> comp >> fwrC.getChannel(0)
 
     fwrC.open("compressed.dat")
     fwrU.open("uncompressed.dat")
@@ -70,10 +64,8 @@ def read_files():
 
     comp = rogue.utilities.StreamUnZip()
 
-    pyrogue.streamConnect(frdU,prbsU)
-
-    pyrogue.streamConnect(frdC,comp)
-    pyrogue.streamConnect(comp,prbsC)
+    frdU >> prbsU
+    frdC >> comp >> prbsC
 
     frdU.open("uncompressed.dat.1")
     frdC.open("compressed.dat.1")
@@ -102,4 +94,5 @@ def test_file_compress():
 if __name__ == "__main__":
     write_files()
     read_files()
+
 

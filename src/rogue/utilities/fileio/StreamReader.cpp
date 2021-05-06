@@ -10,12 +10,12 @@
  * Description :
  *    Class to read data files.
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -36,6 +36,7 @@ namespace ris = rogue::interfaces::stream;
 namespace ruf = rogue::utilities::fileio;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp = boost::python;
 #endif
@@ -60,14 +61,14 @@ void ruf::StreamReader::setup_python() {
 }
 
 //! Creator
-ruf::StreamReader::StreamReader() { 
+ruf::StreamReader::StreamReader() {
    baseName_   = "";
    readThread_ = NULL;
    active_     = false;
 }
 
 //! Deconstructor
-ruf::StreamReader::~StreamReader() { 
+ruf::StreamReader::~StreamReader() {
    close();
 }
 
@@ -87,12 +88,17 @@ void ruf::StreamReader::open(std::string file) {
       baseName_ = file;
    }
 
-   if ( (fd_ = ::open(file.c_str(),O_RDONLY)) < 0 ) 
-      throw(rogue::GeneralError::open("StreamReader::open",file));
+   if ( (fd_ = ::open(file.c_str(),O_RDONLY)) < 0 )
+      throw(rogue::GeneralError::create("StreamReader::open","Failed to open data file: %s",file.c_str()));
 
    active_ = true;
    threadEn_ = true;
    readThread_ = new std::thread(&StreamReader::runThread, this);
+
+   // Set a thread name
+#ifndef __MACH__
+   pthread_setname_np( readThread_->native_handle(), "StreamReader" );
+#endif
 }
 
 //! Open file
@@ -204,7 +210,7 @@ void ruf::StreamReader::runThread() {
          while ( (err == false) && (size > 0) ) {
             bSize = size;
 
-            // Adjust to buffer size, if neccessary
+            // Adjust to buffer size, if necessary
             if ( bSize > (*it)->getSize() ) bSize = (*it)->getSize();
 
             if ( (ret = read(fd_,(*it)->begin(),bSize)) != bSize) {

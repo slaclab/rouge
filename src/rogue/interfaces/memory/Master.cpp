@@ -8,12 +8,12 @@
  * Description:
  * Memory master interface.
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -22,6 +22,8 @@
 #include <rogue/interfaces/memory/Constants.h>
 #include <rogue/interfaces/memory/Transaction.h>
 #include <rogue/GeneralError.h>
+#include <rogue/Helpers.h>
+#include <cstring>
 #include <memory>
 #include <rogue/GilRelease.h>
 #include <rogue/ScopedGil.h>
@@ -30,6 +32,7 @@
 namespace rim = rogue::interfaces::memory;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 #endif
@@ -46,11 +49,12 @@ void rim::Master::setup_python() {
       .def("_setSlave",           &rim::Master::setSlave)
       .def("_getSlave",           &rim::Master::getSlave)
       .def("_reqSlaveId",         &rim::Master::reqSlaveId)
+      .def("_reqSlaveName",       &rim::Master::reqSlaveName)
       .def("_reqMinAccess",       &rim::Master::reqMinAccess)
       .def("_reqMaxAccess",       &rim::Master::reqMaxAccess)
       .def("_reqAddress",         &rim::Master::reqAddress)
       .def("_getError",           &rim::Master::getError)
-      .def("_setError",           &rim::Master::setError)
+      .def("_clearError",         &rim::Master::clearError)
       .def("_setTimeout",         &rim::Master::setTimeout)
       .def("_reqTransaction",     &rim::Master::reqTransactionPy)
       .def("_waitTransaction",    &rim::Master::waitTransaction)
@@ -60,22 +64,27 @@ void rim::Master::setup_python() {
       .staticmethod("_setBits")
       .def("_anyBits",            &rim::Master::anyBits)
       .staticmethod("_anyBits")
+      .def("__rshift__",          &rim::Master::rshiftPy)
+      .def("_stop",               &rim::Master::stop)
    ;
 #endif
 }
 
 //! Create object
 rim::Master::Master() {
-   error_   = 0;
-   slave_   = rim::Slave::create(4,4); // Empty placeholder
+   error_   = "";
+   slave_   = rim::Slave::create(4,0); // Empty placeholder
 
    rogue::defaultTimeout(sumTime_);
 
    log_ = rogue::Logging::create("memory.Master");
-} 
+}
 
 //! Destroy object
 rim::Master::~Master() { }
+
+//! Stop the interface
+void rim::Master::stop() {}
 
 //! Set slave
 void rim::Master::setSlave ( rim::SlavePtr slave ) {
@@ -94,6 +103,11 @@ uint32_t rim::Master::reqSlaveId() {
    return(slave_->doSlaveId());
 }
 
+//! Query the slave name
+std::string rim::Master::reqSlaveName() {
+   return(slave_->doSlaveName());
+}
+
 //! Query the minimum access size in bytes for interface
 uint32_t rim::Master::reqMinAccess() {
    return(slave_->doMinAccess());
@@ -110,15 +124,15 @@ uint64_t rim::Master::reqAddress() {
 }
 
 //! Get error
-uint32_t rim::Master::getError() {
+std::string rim::Master::getError() {
    return error_;
 }
 
 //! Rst error
-void rim::Master::setError(uint32_t error) {
+void rim::Master::clearError() {
    rogue::GilRelease noGil;
    std::lock_guard<std::mutex> lock(mastMtx_);
-   error_ = error;
+   error_ = "";
 }
 
 //! Set timeout
@@ -129,7 +143,7 @@ void rim::Master::setTimeout(uint64_t timeout) {
    if (timeout != 0 ) {
       div_t divResult = div(timeout,1000000);
       sumTime_.tv_sec  = divResult.quot;
-      sumTime_.tv_usec = divResult.rem;       
+      sumTime_.tv_usec = divResult.rem;
    }
 }
 
@@ -159,7 +173,9 @@ uint32_t rim::Master::reqTransactionPy(uint64_t address, boost::python::object p
 
    if ( (tran->size_ + offset) > tran->pyBuf_.len ) {
       PyBuffer_Release(&(tran->pyBuf_));
-      throw(rogue::GeneralError::boundary("Master::reqTransactionPy",(tran->size_+offset),tran->pyBuf_.len));
+      throw(rogue::GeneralError::create("Master::reqTransactionPy",
+               "Attempt to access %i bytes in python buffer with size %i at offset %i",
+               tran->size_,tran->pyBuf_.len,offset));
    }
 
    tran->pyValid_ = true;
@@ -184,8 +200,9 @@ uint32_t rim::Master::intTransaction(rim::TransactionPtr tran) {
       tranMap_[tran->id_] = tran;
    }
 
-   
    log_->debug("Request transaction type=%i id=%i",tran->type_,tran->id_);
+   tran->log_->debug("Created transaction type=%i id=%i, address=0x%.8x, size=0x%x",
+         tran->type_,tran->id_,tran->address_,tran->size_);
    slave->doTransaction(tran);
    tran->refreshTimer(tran);
    return(tran->id_);
@@ -195,7 +212,7 @@ uint32_t rim::Master::intTransaction(rim::TransactionPtr tran) {
 void rim::Master::waitTransaction(uint32_t id) {
    TransactionMap::iterator it;
    rim::TransactionPtr tran;
-   uint32_t error;
+   std::string error;
 
    rogue::GilRelease noGil;
    while (1) {
@@ -213,51 +230,24 @@ void rim::Master::waitTransaction(uint32_t id) {
       }
 
       // Outside of lock
-      if ( (error = tran->wait()) != 0 ) error_ = error;
+      if ( (error = tran->wait()) != "" ) error_ = error;
    }
 }
 
-#ifndef NO_PYTHON
-
 //! Copy bits from src to dst with lsbs and size
-void rim::Master::copyBits(boost::python::object dst, uint32_t dstLsb, boost::python::object src, uint32_t srcLsb, uint32_t size) {
+void rim::Master::copyBits(uint8_t *dstData, uint32_t dstLsb, uint8_t *srcData, uint32_t srcLsb, uint32_t size) {
 
-   Py_buffer srcBuf;
-   Py_buffer dstBuf;
    uint32_t  srcBit;
    uint32_t  srcByte;
-   uint8_t * srcData;
    uint32_t  dstBit;
    uint32_t  dstByte;
-   uint8_t * dstData;
    uint32_t  rem;
    uint32_t  bytes;
 
-   if ( PyObject_GetBuffer(dst.ptr(),&dstBuf,PyBUF_SIMPLE) < 0 )
-      throw(rogue::GeneralError("Master::copyBits","Python Buffer Error"));
-
-   if ( (dstLsb + size) > (dstBuf.len*8) ) {
-      PyBuffer_Release(&dstBuf);
-      throw(rogue::GeneralError::boundary("Master::copyBits",(dstLsb + size),(dstBuf.len*8)));
-   }
-
-   if ( PyObject_GetBuffer(src.ptr(),&srcBuf,PyBUF_SIMPLE) < 0 ) {
-      PyBuffer_Release(&dstBuf);
-      throw(rogue::GeneralError("Master::copyBits","Python Buffer Error"));
-   }
-
-   if ( (srcLsb + size) > (srcBuf.len*8) ) {
-      PyBuffer_Release(&srcBuf);
-      PyBuffer_Release(&dstBuf);
-      throw(rogue::GeneralError::boundary("Master::copyBits",(srcLsb + size),(srcBuf.len*8)));
-   }
-
    srcByte = srcLsb / 8;
    srcBit  = srcLsb % 8;
-   srcData = (uint8_t *)srcBuf.buf;
    dstByte = dstLsb / 8;
    dstBit  = dstLsb % 8;
-   dstData = (uint8_t *)dstBuf.buf;
    rem = size;
 
    do {
@@ -282,31 +272,56 @@ void rim::Master::copyBits(boost::python::object dst, uint32_t dstLsb, boost::py
          rem -= 1;
       }
    } while (rem != 0);
+}
+
+#ifndef NO_PYTHON
+
+//! Copy bits from src to dst with lsbs and size
+void rim::Master::copyBitsPy(boost::python::object dst, uint32_t dstLsb, boost::python::object src, uint32_t srcLsb, uint32_t size) {
+
+   Py_buffer srcBuf;
+   Py_buffer dstBuf;
+
+   if ( PyObject_GetBuffer(dst.ptr(),&dstBuf,PyBUF_SIMPLE) < 0 )
+      throw(rogue::GeneralError("Master::copyBits","Python Buffer Error"));
+
+   if ( (dstLsb + size) > (dstBuf.len*8) ) {
+      PyBuffer_Release(&dstBuf);
+      throw(rogue::GeneralError::create("Master::copyBits",
+               "Attempt to copy %i bits starting from bit %i from dest array with bitSize %i",
+               size, dstLsb, dstBuf.len*8));
+   }
+
+   if ( PyObject_GetBuffer(src.ptr(),&srcBuf,PyBUF_SIMPLE) < 0 ) {
+      PyBuffer_Release(&dstBuf);
+      throw(rogue::GeneralError("Master::copyBits","Python Buffer Error"));
+   }
+
+   if ( (srcLsb + size) > (srcBuf.len*8) ) {
+      PyBuffer_Release(&srcBuf);
+      PyBuffer_Release(&dstBuf);
+      throw(rogue::GeneralError::create("Master::copyBits",
+               "Attempt to copy %i bits starting from bit %i from source array with bitSize %i",
+               size, srcLsb, srcBuf.len*8));
+   }
+
+   copyBits((uint8_t *)dstBuf.buf, dstLsb, (uint8_t *)srcBuf.buf, srcLsb, size);
 
    PyBuffer_Release(&srcBuf);
    PyBuffer_Release(&dstBuf);
 }
 
+#endif
+
 //! Set all bits in dest with lbs and size
-void rim::Master::setBits(boost::python::object dst, uint32_t lsb, uint32_t size) {
-   Py_buffer dstBuf;
+void rim::Master::setBits(uint8_t *dstData, uint32_t lsb, uint32_t size) {
    uint32_t  dstBit;
    uint32_t  dstByte;
-   uint8_t * dstData;
    uint32_t  rem;
    uint32_t  bytes;
 
-   if ( PyObject_GetBuffer(dst.ptr(),&dstBuf,PyBUF_SIMPLE) < 0 )
-      throw(rogue::GeneralError("Master::setBits","Python Buffer Error"));
-
-   if ( (lsb + size) > (dstBuf.len*8) ) {
-      PyBuffer_Release(&dstBuf);
-      throw(rogue::GeneralError::boundary("Master::setBits",(lsb + size),(dstBuf.len*8)));
-   }
-
    dstByte = lsb / 8;
    dstBit  = lsb % 8;
-   dstData = (uint8_t *)dstBuf.buf;
    rem = size;
 
    do {
@@ -327,31 +342,42 @@ void rim::Master::setBits(boost::python::object dst, uint32_t lsb, uint32_t size
          rem -= 1;
       }
    } while (rem != 0);
+}
+
+#ifndef NO_PYTHON
+
+//! Set all bits in dest with lbs and size
+void rim::Master::setBitsPy(boost::python::object dst, uint32_t lsb, uint32_t size) {
+   Py_buffer dstBuf;
+
+   if ( PyObject_GetBuffer(dst.ptr(),&dstBuf,PyBUF_SIMPLE) < 0 )
+      throw(rogue::GeneralError("Master::setBits","Python Buffer Error"));
+
+   if ( (lsb + size) > (dstBuf.len*8) ) {
+      PyBuffer_Release(&dstBuf);
+      throw(rogue::GeneralError::create("Master::setBits",
+               "Attempt to set %i bits starting from bit %i in array with bitSize %i",
+               size, lsb, dstBuf.len*8));
+   }
+
+   setBits((uint8_t *)dstBuf.buf, lsb, size);
 
    PyBuffer_Release(&dstBuf);
 }
 
+#endif
+
+
 //! Return true if any bits are set in range
-bool rim::Master::anyBits(boost::python::object dst, uint32_t lsb, uint32_t size) {
-   Py_buffer dstBuf;
+bool rim::Master::anyBits(uint8_t *dstData, uint32_t lsb, uint32_t size) {
    uint32_t  dstBit;
    uint32_t  dstByte;
-   uint8_t * dstData;
    uint32_t  rem;
    uint32_t  bytes;
    bool      ret;
 
-   if ( PyObject_GetBuffer(dst.ptr(),&dstBuf,PyBUF_SIMPLE) < 0 )
-      throw(rogue::GeneralError("Master::anyBits","Python Buffer Error"));
-
-   if ( (lsb + size) > (dstBuf.len*8) ) {
-      PyBuffer_Release(&dstBuf);
-      throw(rogue::GeneralError::boundary("Master::anyBits",(lsb + size),(dstBuf.len*8)));
-   }
-
    dstByte = lsb / 8;
    dstBit  = lsb % 8;
-   dstData = (uint8_t *)dstBuf.buf;
    rem = size;
    ret = false;
 
@@ -374,9 +400,62 @@ bool rim::Master::anyBits(boost::python::object dst, uint32_t lsb, uint32_t size
       }
    } while (ret == false && rem != 0);
 
+   return ret;
+}
+
+
+#ifndef NO_PYTHON
+
+//! Return true if any bits are set in range
+bool rim::Master::anyBitsPy(boost::python::object dst, uint32_t lsb, uint32_t size) {
+   Py_buffer dstBuf;
+   bool ret;
+
+   if ( PyObject_GetBuffer(dst.ptr(),&dstBuf,PyBUF_SIMPLE) < 0 )
+      throw(rogue::GeneralError("Master::anyBits","Python Buffer Error"));
+
+   if ( (lsb + size) > (dstBuf.len*8) ) {
+      PyBuffer_Release(&dstBuf);
+      throw(rogue::GeneralError::create("Master::anyBits",
+               "Attempt to access %i bits starting from bit %i from array with bitSize %i",
+               size, lsb, dstBuf.len*8));
+   }
+
+   ret = anyBits((uint8_t *)dstBuf.buf, lsb, size);
+
    PyBuffer_Release(&dstBuf);
    return ret;
 }
 
+void rim::Master::rshiftPy ( bp::object p ) {
+   rim::SlavePtr slv;
+
+   // First Attempt to access object as a memory slave
+   boost::python::extract<rim::SlavePtr> get_slave(p);
+
+   // Test extraction
+   if ( get_slave.check() ) slv = get_slave();
+
+   // Otherwise look for indirect call
+   else if ( PyObject_HasAttrString(p.ptr(), "_getMemorySlave" ) ) {
+
+      // Attempt to convert returned object to slave pointer
+      boost::python::extract<rim::SlavePtr> get_slave(p.attr("_getMemorySlave")());
+
+      // Test extraction
+      if ( get_slave.check() ) slv = get_slave();
+   }
+
+   // Success
+   if ( slv != NULL ) setSlave(slv);
+   else throw(rogue::GeneralError::create("memory::Master::rshiftPy","Attempt to use >> operator with incompatible memory slave"));
+}
+
 #endif
+
+//! Support >> operator in C++
+rim::SlavePtr & rim::Master::operator >>(rim::SlavePtr & other) {
+   setSlave(other);
+   return other;
+}
 

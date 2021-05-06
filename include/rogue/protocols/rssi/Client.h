@@ -2,19 +2,15 @@
  *-----------------------------------------------------------------------------
  * Title      : RSSI Client Class
  * ----------------------------------------------------------------------------
- * File       : Client.h
- * Created    : 2017-01-07
- * Last update: 2017-01-07
- * ----------------------------------------------------------------------------
  * Description:
  * UDP Client
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -72,9 +68,9 @@ namespace rogue {
                //! Get Drop Count
                uint32_t getDropCount();
 
-               //! Get Retran Count
+               //! Get Retransmit Count
                uint32_t getRetranCount();
-               
+
                //! Get locBusy
                bool getLocBusy();
 
@@ -130,7 +126,7 @@ namespace rogue {
 
          };
 
-         // Convienence
+         // Convenience
          typedef std::shared_ptr<rogue::protocols::rssi::Client> ClientPtr;
 
       }

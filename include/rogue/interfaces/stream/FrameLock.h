@@ -8,12 +8,12 @@
  * Description:
  * Memory Frame lock
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -32,8 +32,8 @@ namespace rogue {
          /**
           * The FrameLock is a container for holding a lock on Frame data while accessing that
           * data. This lock allows multiple stream Slave objects to read and update Frame data
-          * while ensuring only one thread is updating at a time. The lock is relased when
-          * the FrameLock object is destroyed. The FrameLock oject is never created directly,
+          * while ensuring only one thread is updating at a time. The lock is released when
+          * the FrameLock object is destroyed. The FrameLock object is never created directly,
           * instead it is returned by the Frame::lock() method.
           */
          class FrameLock {
@@ -71,7 +71,7 @@ namespace rogue {
                void unlock();
 
                //! Enter method for python, does nothing
-               /** This exists only to support the 
+               /** This exists only to support the
                 * with call in python.
                 *
                 * Exposed as __enter__() to Python
@@ -79,7 +79,7 @@ namespace rogue {
                void enter();
 
                //! Exit method for python, does nothing
-               /** This exists only to support the 
+               /** This exists only to support the
                 * with call in python.
                 *
                 * Exposed as __exit__() to Python

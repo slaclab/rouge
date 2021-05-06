@@ -14,14 +14,16 @@ branch of Rogue. New documentation is being added incrementally over time.
    :maxdepth: 3
    :caption: Contents:
 
-   interfaces/index
-   hardware/index
-   logging/index 
-   custom_module/index
    installing/index
+   interfaces/index
+   utilities/index
+   hardware/index
+   protocols/index
+   logging/index
+   custom_module/index
 
-Please email rherbst@slac.stanford.edu if you see any errors or have any 
-questions about anything in the current documenation. We are still adding 
+Please email rherbst@slac.stanford.edu if you see any errors or have any
+questions about anything in the current documentation. We are still adding
 content and flushing out errors and typos.
 
 Indices and tables

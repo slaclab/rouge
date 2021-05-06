@@ -2,28 +2,71 @@
 #-----------------------------------------------------------------------------
 # Title      : Data over udp/packetizer/rssi test script
 #-----------------------------------------------------------------------------
-# File       : test_udpPacketizer.py
-# Created    : 2018-03-02
-#-----------------------------------------------------------------------------
-# This file is part of the rogue_example software. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue_example software, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue_example software. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue_example software, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
-import rogue.utilities 
+import rogue.utilities
 import rogue.protocols.udp
 import rogue.interfaces.stream
 import rogue
 import pyrogue
 import time
+import threading
 
 #rogue.Logging.setLevel(rogue.Logging.Debug)
 
 FrameCount = 10000
 FrameSize  = 10000
+
+class RssiOutOfOrder(rogue.interfaces.stream.Slave, rogue.interfaces.stream.Master):
+
+    def __init__(self, period=0):
+        rogue.interfaces.stream.Slave.__init__(self)
+        rogue.interfaces.stream.Master.__init__(self)
+
+        self._period = period
+        self._lock   = threading.Lock()
+        self._last   = None
+        self._cnt    = 0
+
+    @property
+    def period(self,value):
+        return self._period
+
+    @period.setter
+    def period(self,value):
+        with self._lock:
+            self._period = value
+
+            # Send any cached frames if period is now 0
+            if self._period == 0 and self._last is not None:
+                self._sendFrame(self._last)
+                self._last = None
+
+    def _acceptFrame(self,frame):
+
+        with self._lock:
+            self._cnt += 1
+
+            # Frame is cached, send current frame before cached frame
+            if self._last is not None:
+                self._sendFrame(frame)
+                self._sendFrame(self._last)
+                self._last = None
+
+            # Out of order period has elapsed, store frame
+            elif self._period > 0 and (self._cnt % self._period) == 0:
+                self._last = frame
+
+            # Otherwise just forward the frame
+            else:
+                self._sendFrame(frame)
+
 
 def data_path(ver,jumbo):
     print("Testing ver={} jumbo={}".format(ver,jumbo))
@@ -51,19 +94,24 @@ def data_path(ver,jumbo):
     prbsTx = rogue.utilities.Prbs()
     prbsRx = rogue.utilities.Prbs()
 
+    # Out of order module on client side
+    coo = RssiOutOfOrder(period=0)
+
     # Client stream
-    pyrogue.streamConnect(prbsTx,cPack.application(0))
-    pyrogue.streamConnectBiDir(cRssi.application(),cPack.transport())
-    pyrogue.streamConnectBiDir(client,cRssi.transport())
+    prbsTx >> cPack.application(0)
+    cRssi.application() == cPack.transport()
+
+    # Insert out of order in the outbound direction
+    cRssi.transport() >> coo >> client >> cRssi.transport()
 
     # Server stream
-    pyrogue.streamConnectBiDir(serv,sRssi.transport())
-    pyrogue.streamConnectBiDir(sRssi.application(),sPack.transport())
-    pyrogue.streamConnect(sPack.application(0),prbsRx)
+    serv == sRssi.transport()
+    sRssi.application() == sPack.transport()
+    sPack.application(0) >> prbsRx
 
-    # Start RSSI
-    sRssi.start()
-    cRssi.start()
+    # Start RSSI with out of order disabled
+    sRssi._start()
+    cRssi._start()
 
     # Wait for connection
     cnt = 0
@@ -73,19 +121,25 @@ def data_path(ver,jumbo):
         cnt += 1
 
         if cnt == 10:
-            cRssi.stop()
-            sRssi.stop()
+            cRssi._stop()
+            sRssi._stop()
             raise AssertionError('RSSI timeout error. Ver={} Jumbo={}'.format(ver,jumbo))
+
+    # Enable out of order with a period of 10
+    coo.period = 10
 
     print("Generating Frames")
     for _ in range(FrameCount):
         prbsTx.genFrame(FrameSize)
     time.sleep(1)
 
+    # Disable out of order
+    coo.period = 0
+
     # Stop connection
     print("Closing Link")
-    cRssi.stop()
-    sRssi.stop()
+    cRssi._stop()
+    sRssi._stop()
 
     if prbsRx.getRxCount() != FrameCount:
         raise AssertionError('Frame count error. Ver={} Jumbo={} Got = {} expected = {}'.format(ver,jumbo,prbsRx.getRxCount(),FrameCount))

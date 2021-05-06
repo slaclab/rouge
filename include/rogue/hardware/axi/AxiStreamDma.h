@@ -2,17 +2,12 @@
  *-----------------------------------------------------------------------------
  * Title      : AxiStreamDma Interface Class
  * ----------------------------------------------------------------------------
- * File       : AxiStreamDma.h
- * Author     : Ryan Herbst, rherbst@slac.stanford.edu
- * Created    : 2017-09-17
- * Last update: 2017-09-17
- * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -33,12 +28,12 @@ namespace rogue {
          /** This class provides a bridge between the Rogue stream interface and one
           * of the AES Stream Drivers device drivers. This bridge allows Rogue Frames
           * to be sent and received to PCIE Express boards (using the data_dev driver)
-          * or Zynq ZXI4 FPGA fabrics (using the rce_stream drvier). This interface
+          * or Zynq ZXI4 FPGA fabrics (using the rce_stream driver). This interface
           * will allocate Frame and Buffer objects using memory mapped DMA buffers
           * or from a local memory pool when zero copy mode is disabled or a Frame
           * with is requested with the zero copy flag set to false.
           */
-         class AxiStreamDma : public rogue::interfaces::stream::Master, 
+         class AxiStreamDma : public rogue::interfaces::stream::Master,
                               public rogue::interfaces::stream::Slave {
 
                //! Max number of buffers to receive at once
@@ -68,7 +63,7 @@ namespace rogue {
                std::thread* thread_;
                bool threadEn_;
 
-               //! Log 
+               //! Log
                std::shared_ptr<rogue::Logging> log_;
 
                //! Thread background
@@ -77,27 +72,33 @@ namespace rogue {
                //! Enable zero copy
                bool zeroCopyEn_;
 
+               //! Return queue
+               rogue::Queue<uint32_t> retQueue_;
+
+               //! Return thold
+               uint32_t retThold_;
+
             public:
 
-               //! Class factory which returns a AxiStreamDmaPtr to a newly created AxiMemMap object
+               //! Class factory which returns a AxiStreamDmaPtr to a newly created AxiStreamDma object
                /** Exposed to Python as rogue.hardware.axi.AxiStreamDma()
                 *
                 * The destination field is a sideband signal provided in the AxiStream
                 * protocol which allows a single interface to handle multiple frames
                 * with different purposes. The use of this field is driver specific, but
                 * the lower 8-bits are typically passed in the tDest field of the hardware
-                * frame and bits 8 and up are used to index the dma channel in the 
+                * frame and bits 8 and up are used to index the dma channel in the
                 * lower level hardware.
                 *
                 * The SSI Enable flag determines if the hardware frame follows the SLAC Streaming
-                * itnerface standard. This standard defines a SOF flag in the first user field
+                * interface standard. This standard defines a SOF flag in the first user field
                 * at bit 1 and and EOFE flag in the last user field bit 0.
                 * @param path Path to device. i.e /dev/datadev_0
                 * @param dest Destination index for dma transactions
                 * @param ssiEnable Enable SSI user fields
                 * @return AxiStreamDma pointer (AxiStreamDmaPtr)
                 */
-               static std::shared_ptr<rogue::hardware::axi::AxiStreamDma> 
+               static std::shared_ptr<rogue::hardware::axi::AxiStreamDma>
                   create (std::string path, uint32_t dest, bool ssiEnable);
 
                // Setup class in python
@@ -109,10 +110,13 @@ namespace rogue {
                // Destructor
                ~AxiStreamDma();
 
+               //! Stop the interface
+               void stop();
+
                //! Set timeout for frame transmits in microseconds
                /** This setting defines how long to wait for the lower level
                 * driver to be ready to send data. The current implementation
-                * will geenrate a warning message after each timeout but will
+                * will generate a warning message after each timeout but will
                 * continue to wait for the driver.
                 *
                 * Exposed to python as SetTimeout()
@@ -124,7 +128,7 @@ namespace rogue {
                /** This function forwards the passed level value as a debug
                 * level to the lower level driver. Current drivers have a single
                 * level of 1, but any positive value will enable debug. Debug
-                * messages can be reviewed using the linux command 'dmesg'
+                * messages can be reviewed using the Linux command 'dmesg'
                 *
                 * Exposed to python as setDriverDebug()
                 * @param level Debug level, >= 1 enabled debug
@@ -139,7 +143,7 @@ namespace rogue {
                 * access to the memory which the lower level DMA engines uses.
                 * When zero copy mode is disabled a memory buffer will be allocated
                 * using the Pool class and the DMA data will be coped to or from this
-                * buffer. 
+                * buffer.
                 *
                 * Exposed to python as setZeroCopyEn()
                 * @param state Boolean indicating zero copy mode
@@ -149,7 +153,7 @@ namespace rogue {
                //! Strobe ack line (hardware specific)
                /** This method forwards an ack command to the lower
                 * level driver. This is used in some cases to generate
-                * a hardware strobe on the dma interface. 
+                * a hardware strobe on the dma interface.
                 *
                 * Exposed to python as dmaAck()
                 */

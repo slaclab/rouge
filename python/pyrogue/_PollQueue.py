@@ -1,26 +1,22 @@
-#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Title      : PyRogue base module - PollQueue Class
 #-----------------------------------------------------------------------------
-# File       : pyrogue/_PollQueue.py
-# Created    : 2017-05-16
-#-----------------------------------------------------------------------------
-# This file is part of the rogue software platform. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue software platform, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
 import sys
 import threading
-import collections
 import datetime
 import itertools
 import heapq
 import rogue.interfaces.memory
 import pyrogue as pr
+
 
 class PollQueueEntry(object):
     def __init__(self, readTime, count, interval, block):
@@ -35,17 +31,18 @@ class PollQueueEntry(object):
     def __gt__(self,other):
         return self.readTime > other.readTime
 
+
 class PollQueue(object):
 
     def __init__(self,*, root):
         self._pq = [] # The heap queue
         self._entries = {} # {Block: Entry} mapping to look up if a block is already in the queue
         self._counter = itertools.count()
-        self._lock = threading.RLock()
-        self._update = threading.Condition()
+        self._condLock = threading.Condition(threading.RLock())
         self._run = True
         self._pause = True
         self._root = root
+        self.blockCount = 0
         self._pollThread = threading.Thread(target=self._poll)
 
         # Setup logging
@@ -56,9 +53,9 @@ class PollQueue(object):
         self._log.info("PollQueue Started")
 
     def _addEntry(self, block, interval):
-        with self._lock:
+        with self._condLock:
             timedelta = datetime.timedelta(seconds=interval)
-            # new entries are always polled first immediately 
+            # new entries are always polled first immediately
             # (rounded up to the next second)
             readTime = datetime.datetime.now()
             readTime = readTime.replace(microsecond=0)
@@ -66,25 +63,34 @@ class PollQueue(object):
             self._entries[block] = entry
             heapq.heappush(self._pq, entry)
             # Wake up the thread
-            with self._update:
-                self._update.notify()
+            self._condLock.notify()
+
+    def _blockIncrement(self):
+        with self._condLock:
+            self.blockCount += 1
+            self._condLock.notify()
+
+    def _blockDecrement(self):
+        with self._condLock:
+            self.blockCount -= 1
+            self._condLock.notify()
 
     def updatePollInterval(self, var):
-        with self._lock:
+        with self._condLock:
             self._log.debug(f'updatePollInterval {var} - {var.pollInterval}')
             # Special case: Variable has no block and just depends on other variables
             # Then do update on each dependency instead
             if not hasattr(var, '_block') or var._block is None:
                 if len(var.dependencies) > 0:
                     for dep in var.dependencies:
-                        if dep.pollInterval == 0 or var.pollInterval < dep.pollInterval:
+                        if var.pollInterval != 0 and (dep.pollInterval == 0 or var.pollInterval < dep.pollInterval):
                             dep.pollInterval = var.pollInterval
 
                 return
 
             if var._block in self._entries.keys():
                 oldInterval = self._entries[var._block].interval
-                blockVars = [v for v in var._block._variables if v.pollInterval > 0]
+                blockVars = [v for v in var._block.variables if v.pollInterval > 0]
                 if len(blockVars) > 0:
                     minVar = min(blockVars, key=lambda x: x.pollInterval)
                     newInterval = datetime.timedelta(seconds=minVar.pollInterval)
@@ -96,35 +102,47 @@ class PollQueue(object):
                 else:
                     # No more variables belong to block entry, can remove it
                     self._entries[var._block].block = None
-            else:
-                # Pure entry add
+                    del self._entries[var._block]
+
+            # New entry with non-zero poll interval, pure entry add
+            elif var.pollInterval > 0:
                 self._addEntry(var._block, var.pollInterval)
 
     def _poll(self):
         """Run by the poll thread"""
         while True:
-            now = datetime.datetime.now()
 
             if self.empty() or self.paused():
                 # Sleep until woken
-                with self._update:
-                    self._update.wait()
+                with self._condLock:
+                    self._condLock.wait()
+
+                if self._run is False:
+                    self._log.info("PollQueue thread exiting")
+                    return
+                else:
+                    continue
             else:
                 # Sleep until the top entry is ready to be polled
                 # Or a new entry is added by updatePollInterval
+                now = datetime.datetime.now()
                 readTime = self.peek().readTime
                 waitTime = (readTime - now).total_seconds()
-                with self._update:
+                with self._condLock:
                     self._log.debug(f'Poll thread sleeping for {waitTime}')
-                    self._update.wait(waitTime)
+                    self._condLock.wait(waitTime)
 
             self._log.debug(f'Global reference count: {sys.getrefcount(None)}')
 
-            with self._lock:
+            with self._condLock:
                 # Stop the thread if someone set run to False
                 if self._run is False:
                     self._log.info("PollQueue thread exiting")
                     return
+
+                # Wait for block count to be zero
+                while self.blockCount > 0:
+                    self._condLock.wait()
 
                 # Start update capture
                 with self._root.updateGroup():
@@ -136,9 +154,9 @@ class PollQueue(object):
                         self._log.debug(f'Polling Block {entry.block.path}')
                         blockEntries.append(entry)
                         try:
-                            entry.block.startTransaction(rogue.interfaces.memory.Read, check=False)
+                            pr.startTransaction(entry.block, type=rogue.interfaces.memory.Read)
                         except Exception as e:
-                            self._log.exception(e)
+                            pr.logException(self._log,e)
 
                         # Update the entry with new read time
                         entry.readTime = now + entry.interval
@@ -148,18 +166,18 @@ class PollQueue(object):
 
                     for entry in blockEntries:
                         try:
-                            entry.block._checkTransaction()
+                            pr.checkTransaction(entry.block)
                         except Exception as e:
-                            self._log.exception(e)
+                            pr.logException(self._log,e)
 
 
     def _expiredEntries(self, time=None):
-        """An iterator of all entries that expire by a given time. 
-        Use datetime.now() if no time provided. Each entry is popped from the queue before being 
+        """An iterator of all entries that expire by a given time.
+        Use datetime.now() if no time provided. Each entry is popped from the queue before being
         yielded by the iterator
         """
-        with self._lock:
-            if time == None:
+        with self._condLock:
+            if time is None:
                 time = datetime.datetime.now()
             while self.empty() is False and self.peek().readTime <= time:
                 entry = heapq.heappop(self._pq)
@@ -168,32 +186,31 @@ class PollQueue(object):
 
 
     def peek(self):
-        with self._lock:
+        with self._condLock:
             if self.empty() is False:
                 return self._pq[0]
             else:
                 return None
 
     def empty(self):
-        with self._lock:
+        with self._condLock:
             return len(self._pq)==0
 
-    def stop(self):
-        with self._lock, self._update:
+    def _stop(self):
+        with self._condLock:
             self._run = False
-            self._update.notify()
+            self._condLock.notify()
 
     def pause(self, value):
-        if value is True:        
-            with self._lock:
+        if value is True:
+            with self._condLock:
                 self._pause = True
         else:
-            with self._lock, self._update:
+            with self._condLock:
                 self._pause = False
-                self._update.notify()
+                self._condLock.notify()
 
 
     def paused(self):
-        with self._lock:
+        with self._condLock:
             return self._pause
-            

@@ -10,12 +10,12 @@
  * Description :
  *    SRP protocol bridge, Version 0
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -41,6 +41,7 @@ namespace rim = rogue::interfaces::memory;
 namespace ris = rogue::interfaces::stream;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 #endif
@@ -60,7 +61,7 @@ void rps::SrpV0::setup_python() {
 }
 
 //! Creator with version constant
-rps::SrpV0::SrpV0() : ris::Master(), ris::Slave(), rim::Slave(4,2048) { 
+rps::SrpV0::SrpV0() : ris::Master(), ris::Slave(), rim::Slave(4,2048) {
    log_ = rogue::Logging::create("SrpV0");
 }
 
@@ -96,7 +97,7 @@ bool rps::SrpV0::setupHeader(rim::TransactionPtr tran, uint32_t *header, uint32_
 
 //! Post a transaction
 void rps::SrpV0::doTransaction(rim::TransactionPtr tran) {
-   ris::Frame::iterator fIter;
+   ris::FrameIterator fIter;
    rim::Transaction::iterator tIter;
    ris::FramePtr  frame;
    uint32_t frameSize;
@@ -107,13 +108,18 @@ void rps::SrpV0::doTransaction(rim::TransactionPtr tran) {
 
    // Size error
    if ((tran->address() % min()) != 0 ) {
-      tran->done(rim::AddressError);
+      tran->error("Transaction address 0x%x is not aligned to min size %i",tran->address(),min());
       return;
    }
 
    // Size error
-   if ((tran->size() % min()) != 0 || tran->size() < min() || tran->size() > max()) {
-      tran->done(rim::SizeError);
+   if ((tran->size() % min()) != 0 || tran->size() < min()) {
+      tran->error("Transaction size 0x%x is not aligned to min size %i",tran->size(),min());
+      return;
+   }
+
+   if (tran->size() > max()) {
+      tran->error("Transaction size 0x%x exceeds max size %i",tran->size(),min());
       return;
    }
 
@@ -127,20 +133,20 @@ void rps::SrpV0::doTransaction(rim::TransactionPtr tran) {
    // Setup iterators
    rogue::GilRelease noGil;
    rim::TransactionLockPtr lock = tran->lock();
-   fIter = frame->beginWrite();
+   fIter = frame->begin();
    tIter = tran->begin();
 
    // Write header
-   ris::toFrame(fIter,headerLen,header); 
+   ris::toFrame(fIter,headerLen,header);
 
    // Write data
    if ( doWrite ) ris::toFrame(fIter, tran->size(), tIter);
 
    // Last field is zero
    tail[0] = 0;
-   ris::toFrame(fIter,TailLen,tail); 
+   ris::toFrame(fIter,TailLen,tail);
 
-   if ( tran->type() == rim::Post ) tran->done(0);
+   if ( tran->type() == rim::Post ) tran->done();
    else addTransaction(tran);
 
    log_->debug("Send frame for id=%i, addr 0x%0.8x. Size=%i, type=%i, doWrite=%i",
@@ -153,7 +159,7 @@ void rps::SrpV0::doTransaction(rim::TransactionPtr tran) {
 
 //! Accept a frame from master
 void rps::SrpV0::acceptFrame ( ris::FramePtr frame ) {
-   ris::Frame::iterator fIter;
+   ris::FrameIterator fIter;
    rim::Transaction::iterator tIter;
    rim::TransactionPtr tran;
    uint32_t header[MaxHeadLen/4];
@@ -168,21 +174,27 @@ void rps::SrpV0::acceptFrame ( ris::FramePtr frame ) {
    rogue::GilRelease noGil;
    ris::FrameLockPtr fLock = frame->lock();
 
+   // Drop errored frames
+   if ( frame->getError() ) {
+      log_->warning("Got errored frame = 0x%i",frame->getError());
+      return; // Invalid frame, drop it
+   }
+
    // Check frame size
    if ( (fSize = frame->getPayload()) < 16 ) {
-      log_->warning("Got undersize frame size = %i",fSize);
+      log_->warning("Got undersized frame size = %i",fSize);
       return; // Invalid frame, drop it
    }
 
    // Setup frame iterator
-   fIter = frame->beginRead();
+   fIter = frame->begin();
 
    // Get the header
    ris::fromFrame(fIter,RxHeadLen,header);
 
    // Extract id from frame
    id = header[0];
-   log_->debug("Got frame id=%i header: 0x%0.8x 0x%0.8x 0x%0.8x", 
+   log_->debug("Got frame id=%i header: 0x%0.8x 0x%0.8x 0x%0.8x",
                id, header[0],header[1],header[2]);
 
    // Find Transaction
@@ -217,23 +229,23 @@ void rps::SrpV0::acceptFrame ( ris::FramePtr frame ) {
    }
 
    // Read tail error value, complete if error is set
-   fIter = frame->endRead()-TailLen;
+   fIter = frame->end()-TailLen;
    ris::fromFrame(fIter,TailLen,tail);
    if ( tail[0] != 0 ) {
-      if ( tail[0] & 0x20000 ) tran->done(rim::BusTimeout);
-      else if ( tail[0] & 0x10000 ) tran->done(rim::BusFail);
-      else tran->done(tail[0]);
+      if ( tail[0] & 0x20000 ) tran->error("Axi bus timeout detected in hardware");
+      else if ( tail[0] & 0x10000 ) tran->error("Axi bus returned fail status in hardware");
+      else tran->error("Non zero status message returned on axi bus in hardware: 0x%x",tail[0]);
       log_->warning("Error detected for ID id=%i, tail=0x%0.8x",id,tail[0]);
       return;
    }
 
    // Copy data if read
    if ( ! doWrite ) {
-      fIter = frame->beginRead() + RxHeadLen;
+      fIter = frame->begin() + RxHeadLen;
       ris::fromFrame(fIter, tran->size(), tIter);
    }
 
    // Done
-   tran->done(0);
+   tran->done();
 }
 

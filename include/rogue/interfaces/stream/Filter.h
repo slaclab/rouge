@@ -1,6 +1,6 @@
 /**
  *-----------------------------------------------------------------------------
- * Title         : SLAC Register Protocol (SRP) Filter
+ * Title         : SLAC Stream Filter
  * ----------------------------------------------------------------------------
  * File          : Filter.h
  * Author        : Ryan Herbst <rherbst@slac.stanford.edu>
@@ -9,12 +9,12 @@
  * Description :
  *    AXI Stream Filter
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -33,9 +33,9 @@ namespace rogue {
          /** In some cases a Frame will have a non zero channel number. This can be the case
           * when reading data from a Data file using a StreamWReader object. This can also
           * occur when receiving data from a Batcher protocol Frame Splitter. The Filter allows
-          * a Slave to be sure it only receives Frame data for a particular channel. The 
-          * Filter oject has a configured channel number and a flag to determine if Frame
-          * ojects with a non-zero error field will be dropped.
+          * a Slave to be sure it only receives Frame data for a particular channel. The
+          * Filter object has a configured channel number and a flag to determine if Frame
+          * objects with a non-zero error field will be dropped.
           */
          class Filter : public rogue::interfaces::stream::Master,
                         public rogue::interfaces::stream::Slave {

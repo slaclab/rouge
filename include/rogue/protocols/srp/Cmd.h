@@ -1,21 +1,16 @@
 /**
  *-----------------------------------------------------------------------------
  * Title         : SLAC Command Protocol
- * ----------------------------------------------------------------------------
- * File          : Cmd.h
- * Author        : Ryan Herbst <rherbst@slac.stanford.edu>
- * Created       : 09/17/2016
- * Last update   : 09/17/2016
  *-----------------------------------------------------------------------------
  * Description :
  *    CMD Version 0
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -32,7 +27,7 @@ namespace rogue {
          //! SRP Cmd
          /*
           * Serves as an interface between memory accesses and streams
-          * carying the SRP protocol. 
+          * carnying the SRP protocol.
           */
         class Cmd : public rogue::interfaces::stream::Master {
 
@@ -55,7 +50,7 @@ namespace rogue {
 
          };
 
-         // Convienence
+         // Convenience
          typedef std::shared_ptr<rogue::protocols::srp::Cmd> CmdPtr;
       }
    }

@@ -5,8 +5,8 @@ Using The TCP Bridge
 ====================
 
 The stream TCP bridge classes allows a Rogue stream to be bridged over a TCP network interface. The bridge
-consistans of a server and a client. The server, :ref:`interfaces_stream_tcp_server`, listens for incoming 
-connections on a pair ot TCP ports.  The client, :ref:`interfaces_stream_tcp_client`, connects to the server 
+consists of a server and a client. The server, :ref:`interfaces_stream_tcp_server`, listens for incoming 
+connections on a pair of TCP ports.  The client, :ref:`interfaces_stream_tcp_client`, connects to the server 
 at a specific address. Both ends of the bridge are bi-directional allowing a full duplex stream to be bridged
 between the server and client.
 
@@ -32,11 +32,8 @@ on the client. The Python server is able to interface with either a Python or C+
    # Pass an address of 192.168.1.1 to listen on only that specific interface
    tcp = rogue.interfaces.stream.TcpServer("*",8000)
 
-   # Connect the transmitter
-   pyrogue.streamConnect(src,tcp)
-
-   # Connect the receiver
-   pyrogue.streamConnect(tcp,dst)
+   # Connect the transmitter and the receiver
+   src >> tcp >> dst
 
 Python Client
 =============
@@ -59,11 +56,9 @@ on the server.  The Python client is able to interface with either a Python or C
    # Start a TCP Bridge Client, Connect remote server at 192.168.1.1 ports 8000 & 8001.
    tcp = rogue.interfaces.stream.TcpClient("192.168.1.1",8000)
 
-   # Connect the transmitter
-   pyrogue.streamConnect(src,tcp)
+   # Connect the transmitter and the receiver
+   src >> tcp >> dst
 
-   # Connect the receiver
-   pyrogue.streamConnect(tcp,dst)
 
 C++ Server
 ==========
@@ -75,7 +70,6 @@ on the client.  The C++ server is able to interface with either a Python or C++ 
 .. code-block:: c
 
    #include <rogue/interfaces/stream/TcpServer.h>
-   #include <rogue/Helpers.h>
 
    // Local transmitter
    MyCustomMasterPtr src = MyCustomMaster::create()
@@ -88,10 +82,7 @@ on the client.  The C++ server is able to interface with either a Python or C++ 
    rogue::interfaces::stream::TcpServerPtr tcp = rogue::interfaces::stream::TcpServer::create("*",8000)
 
    // Connect the transmitter
-   streamConnect(src,tcp)
-
-   // Connect the receiver
-   streamConnect(tcp,dst)
+   *( *src >> tcp ) >> dst;
 
 C++ Client
 ==========
@@ -103,7 +94,6 @@ on the server.  The C++ client is able to interface with either a Python or C++ 
 .. code-block:: c
 
    #include <rogue/interfaces/stream/TcpClient.h>
-   #include <rogue/Helpers.h>
 
    // Local transmitter
    MyCustomMasterPtr src = MyCustomMaster::create()
@@ -115,8 +105,5 @@ on the server.  The C++ client is able to interface with either a Python or C++ 
    rogue::interfaces::stream::TcpClientPtr tcp = rogue::interfaces::stream::TcpClient::create("192.168.1.1",8000)
 
    // Connect the transmitter
-   streamConnect(src,tcp)
-
-   // Connect the receiver
-   streamConnect(tcp,dst)
+   *( *src >> tcp ) >> dst;
 

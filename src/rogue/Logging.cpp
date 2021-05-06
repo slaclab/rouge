@@ -8,12 +8,12 @@
  * Description:
  * Logging interface for pyrogue
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -32,6 +32,7 @@
 #endif
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp = boost::python;
 #endif
@@ -53,12 +54,12 @@ std::mutex rogue::Logging::levelMtx_;
 std::vector <rogue::LogFilter *> rogue::Logging::filters_;
 
 // Crate logger
-rogue::LoggingPtr rogue::Logging::create(std::string name) {
-   rogue::LoggingPtr log = std::make_shared<rogue::Logging>(name);
+rogue::LoggingPtr rogue::Logging::create(std::string name,bool quiet) {
+   rogue::LoggingPtr log = std::make_shared<rogue::Logging>(name,quiet);
    return log;
 }
 
-rogue::Logging::Logging(std::string name) {
+rogue::Logging::Logging(std::string name, bool quiet) {
    std::vector<rogue::LogFilter *>::iterator it;
 
    name_ = "pyrogue." + name;
@@ -74,7 +75,7 @@ rogue::Logging::Logging(std::string name) {
    }
    levelMtx_.unlock();
 
-   warning("Starting logger with level = %i",level_);
+   if ( ! quiet ) warning("Starting logger with level = %i",level_);
 }
 
 rogue::Logging::~Logging() { }
@@ -145,14 +146,6 @@ void rogue::Logging::debug(const char * fmt, ...) {
    va_start(arg,fmt);
    intLog(rogue::Logging::Debug,fmt,arg);
    va_end(arg);
-}
-
-void rogue::Logging::timeout(const char *txt, struct timeval & tout) {
-   rogue::Logging::critical("%s: Timeout after %li.%li seconds", txt, tout.tv_sec, tout.tv_usec);
-}
-
-void rogue::Logging::timeout(const char *txt, uint32_t tout) {
-   rogue::Logging::critical("%s: Timeout after %i microseconds", txt, tout);
 }
 
 void rogue::Logging::logThreadId() {

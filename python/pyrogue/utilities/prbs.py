@@ -1,30 +1,25 @@
-#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Title      : PyRogue Utilities base module
-#-----------------------------------------------------------------------------
-# File       : pyrogue/utilities/__init__.py
-# Author     : Ryan Herbst, rherbst@slac.stanford.edu
-# Created    : 2016-09-29
-# Last update: 2016-09-29
 #-----------------------------------------------------------------------------
 # Description:
 # Module containing the utilities module class and methods
 #-----------------------------------------------------------------------------
-# This file is part of the rogue software platform. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue software platform, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
 import rogue.utilities
 import pyrogue
 
+
 class PrbsRx(pyrogue.Device):
     """PRBS RX Wrapper"""
 
-    def __init__(self, *, width=None, taps=None, stream=None, **kwargs ):
+    def __init__(self, *, width=None, checkPayload=True, taps=None, stream=None, **kwargs ):
 
         pyrogue.Device.__init__(self, description='PRBS Software Receiver', **kwargs)
         self._prbs = rogue.utilities.Prbs()
@@ -37,7 +32,11 @@ class PrbsRx(pyrogue.Device):
 
         if stream is not None:
             pyrogue.streamConnect(stream, self)
-            
+
+        self.add(pyrogue.LocalVariable(name='rxEnable', description='RX Enable',
+                                       mode='RW', value=True,
+                                       localGet=lambda : self._prbs.getRxEnable(),
+                                       localSet=lambda value: self._prbs.setRxEnable(value)))
 
         self.add(pyrogue.LocalVariable(name='rxErrors', description='RX Error Count',
                                        mode='RO', pollInterval=1, value=0, typeStr='UInt32',
@@ -60,7 +59,7 @@ class PrbsRx(pyrogue.Device):
                                        localGet=self._prbs.getRxBw))
 
         self.add(pyrogue.LocalVariable(name='checkPayload', description='Payload Check Enable',
-                                       mode='RW', value=True, localSet=self._plEnable))
+                                       mode='RW', value=checkPayload, localSet=self._plEnable))
 
     def _plEnable(self,value,changed):
         self._prbs.checkPayload(value)
@@ -72,11 +71,16 @@ class PrbsRx(pyrogue.Device):
     def _getStreamSlave(self):
         return self._prbs
 
+    def __lshift__(self,other):
+        pyrogue.streamConnect(other,self)
+        return other
+
     def setWidth(self,width):
         self._prbs.setWidth(width)
 
     def setTaps(self,taps):
         self._prbs.setTaps(taps)
+
 
 class PrbsTx(pyrogue.Device):
     """PRBS TX Wrapper"""
@@ -98,12 +102,12 @@ class PrbsTx(pyrogue.Device):
         self._prbs.sendCount(sendCount)
 
         self.add(pyrogue.LocalVariable(name='txSize', description='PRBS Frame Size', units='Bytes',
-                                       localSet=self._txSize, mode='RW', value=0, typeStr='UInt32'))
+                                       localSet=self._txSize, mode='RW', value=1024, typeStr='UInt32'))
 
         self.add(pyrogue.LocalVariable(name='txEnable', description='PRBS Run Enable', mode='RW',
                                        value=False, localSet=self._txEnable))
 
-        self.add(pyrogue.LocalCommand(name='genFrame',description='Generate a single frame',
+        self.add(pyrogue.LocalCommand(name='genFrame',description='Generate n frames',value=1,
                                       function=self._genFrame))
 
         self.add(pyrogue.LocalVariable(name='txErrors', description='TX Error Count', mode='RO', pollInterval = 1,
@@ -133,8 +137,9 @@ class PrbsTx(pyrogue.Device):
         self._prbs.resetCount()
         super().countReset()
 
-    def _genFrame(self):
-        self._prbs.genFrame(self.txSize.value())
+    def _genFrame(self,arg=1):
+        for i in range(arg):
+            self._prbs.genFrame(self.txSize.value())
 
     def _txSize(self,value,changed):
         if changed and int(self.txEnable.value()) == 1:
@@ -150,6 +155,10 @@ class PrbsTx(pyrogue.Device):
 
     def _getStreamMaster(self):
         return self._prbs
+
+    def __rshift__(self,other):
+        pyrogue.streamConnect(self,other)
+        return other
 
     def setWidth(self,width):
         self._prbs.setWidth(width)
@@ -183,4 +192,14 @@ class PrbsPair(pyrogue.Device):
 
     def _getStreamSlave(self):
         return self.PrbsTx._getStreamSlave()
-    
+
+    def __rshift__(self,other):
+        pyrogue.streamConnect(self,other)
+        return other
+
+    def __lshift__(self,other):
+        pyrogue.streamConnect(other,self)
+        return other
+
+    def __eq__(self,other):
+        pyrogue.streamConnectBiDir(other,self)

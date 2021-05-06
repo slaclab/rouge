@@ -1,11 +1,6 @@
 /**
  *-----------------------------------------------------------------------------
  * Title         : Data file writer utility.
- * ----------------------------------------------------------------------------
- * File          : StreamWriter.h
- * Author        : Ryan Herbst <rherbst@slac.stanford.edu>
- * Created       : 09/28/2016
- * Last update   : 09/28/2016
  *-----------------------------------------------------------------------------
  * Description :
  *    Class to coordinate data file writing.
@@ -13,7 +8,7 @@
  *    write to a common data file. The data file is a series of banks.
  *    Each bank has a channel and frame flags. The channel is per source and the
  *    lower 24 bits of the frame flags are used as the flags.
- *    The bank is preceeded by 2 - 32-bit headers to indicate bank information
+ *    The bank is proceeded by 2 - 32-bit headers to indicate bank information
  *    and length:
  *
  *       headerA:
@@ -24,12 +19,12 @@
  *          15:0   = Frame flags
  *
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -42,6 +37,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <rogue/Logging.h>
+#include <rogue/EnableSharedFromThis.h>
 #include <map>
 
 namespace rogue {
@@ -51,9 +47,9 @@ namespace rogue {
          class StreamWriterChannel;
 
          //! Stream writer central class
-         class StreamWriter : public std::enable_shared_from_this<rogue::utilities::fileio::StreamWriter> {
+         class StreamWriter : public rogue::EnableSharedFromThis<rogue::utilities::fileio::StreamWriter> {
             friend class StreamWriterChannel;
-            
+
             protected:
 
                // Log
@@ -64,7 +60,10 @@ namespace rogue {
 
                //! Base file name
                std::string baseName_;
-               
+
+               //! Current file index
+               bool isOpen_;
+
                //! Current file index
                uint32_t fdIdx_;
 
@@ -95,7 +94,7 @@ namespace rogue {
                //! Total number of frames in file
                uint32_t frameCount_;
 
-               //! Internal method for file writing 
+               //! Internal method for file writing
                void intWrite(void *data, uint32_t size);
 
                //! Check file size for next write
@@ -162,7 +161,7 @@ namespace rogue {
 
          };
 
-         // Convienence
+         // Convenience
          typedef std::shared_ptr<rogue::utilities::fileio::StreamWriter> StreamWriterPtr;
       }
    }

@@ -24,7 +24,7 @@ by the :ref:`custom_sourcefile`, :ref:`custom_makefile` and :ref:`custom_wrapper
            self.add(MyWrapper.MyCustomSlave(name="testSlave"))
 
            # Connect master to slave
-           pyrogue.streamConnect(self.testMaster,self.testSlave)
+           self.testMaster >> self.testSlave
 
            # Start the tree
            self.start()
@@ -56,7 +56,7 @@ The output of this python script should be the following (with a different rogue
 Testing With EPICS
 ==================
 
-The following scripts is similiar to the above but exposes the variables 
+The following scripts is similiar to the above but exposes the variables
 to epics to allow external control.
 
 .. code:: python
@@ -78,7 +78,7 @@ to epics to allow external control.
            self.add(MyWrapper.MyCustomSlave(name="testSlave"))
 
            # Connect master to slave
-           pyrogue.streamConnect(self.testMaster,self.testSlave)
+           self.testMaster >> self.testSlave
 
            # Start the tree
            self.start()
@@ -108,7 +108,7 @@ In the first terminal:
 
 .. code::
 
-   $ python myEpicsTest.py 
+   $ python myEpicsTest.py
    Rogue/pyrogue version v3.3.1-4-gd384a633. https://github.com/slaclab/rogue
    Loaded my module
    myTest:MyRoot:enable -> MyRoot.enable
@@ -136,7 +136,7 @@ In the first terminal:
 
 In the second terminal we generate two frames from epics. Commands in
 Rogue are exposed as Variables and a caput will initiate the Command
-executation. Since our MyFrameGen Command does not take an arg we
+execution. Since our MyFrameGen Command does not take an arg we
 pass a value of 0 to keep epics happy.
 
 .. code::
@@ -144,14 +144,14 @@ pass a value of 0 to keep epics happy.
    $ caget myTest:MyRoot:testMaster:FrameCount
    myTest:MyRoot:testMaster:FrameCount 0
 
-   $ caget myTest:MyRoot:testSlave:FrameCount 
+   $ caget myTest:MyRoot:testSlave:FrameCount
    myTest:MyRoot:testSlave:FrameCount 0
 
    $ caput myTest:MyRoot:testMaster:FrameSize 210
    Old : myTest:MyRoot:testMaster:FrameSize 0
    New : myTest:MyRoot:testMaster:FrameSize 210
 
-   $ caput myTest:MyRoot:testMaster:MyFrameGen 0  
+   $ caput myTest:MyRoot:testMaster:MyFrameGen 0
    Old : myTest:MyRoot:testMaster:MyFrameGen 0
    New : myTest:MyRoot:testMaster:MyFrameGen 0
 
@@ -159,7 +159,7 @@ pass a value of 0 to keep epics happy.
    Old : myTest:MyRoot:testMaster:MyFrameGen 0
    New : myTest:MyRoot:testMaster:MyFrameGen 0
 
-   $ caget myTest:MyRoot:testMaster:FrameCount   
+   $ caget myTest:MyRoot:testMaster:FrameCount
    myTest:MyRoot:testMaster:FrameCount 2
 
    $ caget myTest:MyRoot:testMaster:ByteCount
@@ -175,7 +175,7 @@ Testing With A GUI
 ==================
 
 In the last test we will add a locally attached GUI along with EPICS. This will allow
-you to experiment with how bot the GUI and EPICS can manipulate variables in parrallel.
+you to experiment with how bot the GUI and EPICS can manipulate variables in parallel.
 In this test we start the GUI in the main script with the core Rogue. It is also possible
 to start one or more remote GUIs. That process is described in TBD.
 
@@ -187,7 +187,7 @@ to start one or more remote GUIs. That process is described in TBD.
    import MyWrapper
    import time
    import pyrogue.protocols.epics
-   import pyrogue.gui
+   import pyrogue.pydm
    import sys
 
    class TestRoot(pyrogue.Root):
@@ -200,7 +200,7 @@ to start one or more remote GUIs. That process is described in TBD.
            self.add(MyWrapper.MyCustomSlave(name="testSlave"))
 
            # Connect master to slave
-           pyrogue.streamConnect(self.testMaster,self.testSlave)
+           self.testMaster >> self.testSlave
 
            # Start the tree
            self.start()
@@ -217,18 +217,11 @@ to start one or more remote GUIs. That process is described in TBD.
 
    with TestRoot() as r:
        print("Running")
-
-       # Create GUI
-       appTop = pyrogue.gui.application(sys.argv)
-       guiTop = pyrogue.gui.GuiTop(group='myTest')
-       guiTop.addTree(r)
-
-       # Run gui
-       appTop.exec_()
+       pyrogue.pydm.runPyDM(root=r,title='MyGui')
 
 You can then start the server:
 
 .. code::
 
-   $ python myEpicsGuiTest.py 
+   $ python myEpicsGuiTest.py
 

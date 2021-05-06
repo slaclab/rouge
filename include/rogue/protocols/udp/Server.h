@@ -2,19 +2,15 @@
  *-----------------------------------------------------------------------------
  * Title      : UDP Server Class
  * ----------------------------------------------------------------------------
- * File       : Server.h
- * Created    : 2017-01-07
- * Last update: 2017-01-07
- * ----------------------------------------------------------------------------
  * Description:
  * UDP Server
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -36,7 +32,7 @@ namespace rogue {
 
          //! PGP Card class
          class Server : public rogue::protocols::udp::Core,
-                        public rogue::interfaces::stream::Master, 
+                        public rogue::interfaces::stream::Master,
                         public rogue::interfaces::stream::Slave {
 
                //! Local port number
@@ -51,7 +47,7 @@ namespace rogue {
             public:
 
                //! Class creation
-               static std::shared_ptr<rogue::protocols::udp::Server> 
+               static std::shared_ptr<rogue::protocols::udp::Server>
                   create (uint16_t port, bool jumbo);
 
                //! Setup class in python
@@ -63,6 +59,9 @@ namespace rogue {
                //! Destructor
                ~Server();
 
+               //! Stop the interface
+               void stop();
+
                //! Get port number
                uint32_t getPort();
 
@@ -70,7 +69,7 @@ namespace rogue {
                void acceptFrame ( std::shared_ptr<rogue::interfaces::stream::Frame> frame );
          };
 
-         // Convienence
+         // Convenience
          typedef std::shared_ptr<rogue::protocols::udp::Server> ServerPtr;
 
       }

@@ -34,6 +34,7 @@
 
 namespace rpe = rogue::protocols::epicsV3;
 
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 
@@ -52,32 +53,47 @@ rpe::Variable::Variable (std::string epicsName, bp::object p, bool syncRead) : V
    std::string type;
    uint32_t    i;
    bool        isEnum;
+   bool        isList;
    bp::dict    ed;
    bp::list    el;
    std::string val;
-   char        tmpType[50];
    uint32_t    count;
+   bool        forceStr;
 
    var_      = bp::object(p);
    syncRead_ = syncRead;
    setAttr_  = "setDisp";
+   forceStr  = false;
 
-   // Get type and determe if this is an enum
+   // Get type and determine if this is an enum
    type = std::string(bp::extract<char *>(var_.attr("typeStr")));
    isEnum = std::string(bp::extract<char *>(var_.attr("disp"))) == "enum";
+   isList = bp::extract<bool>(var_.attr("isList"));
    count = 0;
 
    // Detect list type
-   if ( sscanf(type.c_str(),"List[%49[^]]]",&tmpType) == 1 ) {
-      type = std::string(tmpType);
+   if ( isList ) {
+      type = type.substr(0,type.find("["));
 
-      // Get initial element count
-      count = len(bp::extract<bp::list>(var_.attr("value")()));
-      log_->info("Detected list for %s with type = %s and count = %i", epicsName.c_str(),type.c_str(),count);
+      // First try native list
+      bp::extract<bp::list> ldata(var_.attr("value")());
+
+      if ( ldata.check() ) {
+         count = len(ldata);
+
+         // Get initial element count
+         log_->info("Detected list for %s with type = %s and count = %i", epicsName.c_str(),type.c_str(),count);
+      }
+
+      else {
+         forceStr = true;
+         count = 0;
+         log_->info("Unsupported list for %s with type = %s. Forcing to string\n", epicsName.c_str(),type.c_str());
+      }
    }
 
    // Init gdd record
-   this->initGdd(type, isEnum, count);
+   this->initGdd(type, isEnum, count, forceStr);
 
    // Extract units
    bp::extract<char *> ret(var_.attr("units"));
@@ -86,7 +102,7 @@ rpe::Variable::Variable (std::string epicsName, bp::object p, bool syncRead) : V
    }
    else units_->putConvert("");
 
-   if ( epicsType_ == aitEnumUint8 || epicsType_ == aitEnumUint16 || epicsType_ == aitEnumUint32 ) {
+   if ( (! isString_) && (epicsType_ == aitEnumUint8 || epicsType_ == aitEnumUint16 || epicsType_ == aitEnumUint32 )) {
       bp::extract<uint32_t> hopr(var_.attr("maximum"));
       bp::extract<uint32_t> lopr(var_.attr("minimum"));
       bp::extract<uint32_t> ha(var_.attr("highAlarm"));
@@ -271,12 +287,12 @@ void rpe::Variable::updateAlarm(bp::object status, bp::object severity) {
       else if ( sevrStr == "AlarmMajor" ) sevrVal = epicsSevMajor;
       else sevrVal = 0;
    }
-   
+
    pValue_->setStatSevr(statVal,sevrVal);
 }
 
 // Lock held when called
-void rpe::Variable::valueGet() {
+bool rpe::Variable::valueGet() {
 
    if ( syncRead_ ) {
       { // GIL Scope
@@ -292,9 +308,11 @@ void rpe::Variable::valueGet() {
             }
          } catch (...) {
             log_->error("Error getting values from epics: %s\n",epicsName_.c_str());
+            return false;
          }
       }
    }
+   return true;
 }
 
 // Lock held when called
@@ -377,7 +395,7 @@ void rpe::Variable::fromPython(bp::object value) {
          for ( i = 0; i < size_; i++ ) pF[i] = extractValue<double>(pl[i]);
          pValue_->putRef(pF, new rpe::Destructor<aitFloat64 *>);
       }
-      else throw rogue::GeneralError("Variable::fromPython","Invalid Variable Type");
+      else throw rogue::GeneralError::create("Variable::fromPython","Invalid Variable Type For %s",epicsName_.c_str());
 
    } else {
 
@@ -413,13 +431,13 @@ void rpe::Variable::fromPython(bp::object value) {
          else if ( enumBool.check() ) idx = (enumBool)?1:0;
 
          // Invalid
-         else throw rogue::GeneralError("Variable::fromPython","Invalid enum");
+         else throw rogue::GeneralError::create("Variable::fromPython","Invalid enum for %s",epicsName_.c_str());
 
          log_->info("Python set enum for %s: Enum Value=%i", epicsName_.c_str(),idx);
          pValue_->putConvert(idx);
       }
 
-      else throw rogue::GeneralError("Variable::fromPython","Invalid Variable Type");
+      else throw rogue::GeneralError::create("Variable::fromPython","Invalid Variable Type for %s",epicsName_.c_str());
 
    }
 
@@ -438,7 +456,7 @@ void rpe::Variable::fromPython(bp::object value) {
 }
 
 // Lock already held
-void rpe::Variable::valueSet() {
+bool rpe::Variable::valueSet() {
    rogue::ScopedGil gil;
    bp::list pl;
    uint32_t i;
@@ -449,7 +467,7 @@ void rpe::Variable::valueSet() {
       if ( isString_ ) {
 
          // Process values that are exposed as string in EPICS
-         aitUint8 * pF = new aitUint8[size_];
+         aitUint8 * pF;
          pValue_->getRef(pF);
          var_.attr(setAttr_.c_str())(std::string((char*)pF));
 
@@ -457,49 +475,49 @@ void rpe::Variable::valueSet() {
 
          // Create vector of appropriate type
          if ( epicsType_ == aitEnumUint8 ) {
-            aitUint8 * pF = new aitUint8[size_];
+            aitUint8 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
 
          else if ( epicsType_ == aitEnumUint16 ) {
-            aitUint16 * pF = new aitUint16[size_];
+            aitUint16 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
 
          else if ( epicsType_ == aitEnumUint32 ) {
-            aitUint32 * pF = new aitUint32[size_];
+            aitUint32 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
 
          else if ( epicsType_ == aitEnumInt8 ) {
-            aitInt8 * pF = new aitInt8[size_];
+            aitInt8 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
 
          else if ( epicsType_ == aitEnumInt16 ) {
-            aitInt16 * pF = new aitInt16[size_];
+            aitInt16 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
 
          else if ( epicsType_ == aitEnumInt32 ) {
-            aitInt32 * pF = new aitInt32[size_];
+            aitInt32 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
 
          else if ( epicsType_ == aitEnumFloat32 ) {
-            aitFloat32 * pF = new aitFloat32[size_];
+            aitFloat32 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
 
          else if ( epicsType_ == aitEnumFloat64 ) {
-            aitFloat64 * pF = new aitFloat64[size_];
+            aitFloat64 * pF;
             pValue_->getRef(pF);
             for ( i = 0; i < size_; i++ ) pl.append(pF[i]);
          }
@@ -536,7 +554,9 @@ void rpe::Variable::valueSet() {
       }
    } catch (...) {
       log_->error("Error setting value from epics: %s\n",epicsName_.c_str());
+      return false;
    }
+   return true;
 }
 
 template<typename T>

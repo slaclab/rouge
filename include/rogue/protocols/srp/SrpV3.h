@@ -1,21 +1,16 @@
 /**
  *-----------------------------------------------------------------------------
  * Title         : SLAC Register Protocol (SRP) SrpV3
- * ----------------------------------------------------------------------------
- * File          : SrpV3.h
- * Author        : Ryan Herbst <rherbst@slac.stanford.edu>
- * Created       : 09/17/2016
- * Last update   : 09/17/2016
  *-----------------------------------------------------------------------------
  * Description :
  *    SRP Version 3
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -35,7 +30,7 @@ namespace rogue {
          //! SRP SrpV3
          /*
           * Serves as an interface between memory accesses and streams
-          * carying the SRP protocol. 
+          * carnying the SRP protocol.
           */
          class SrpV3 : public rogue::interfaces::stream::Master,
                        public rogue::interfaces::stream::Slave,
@@ -48,7 +43,7 @@ namespace rogue {
                static const uint32_t TailLen = 4;
 
                // Setup header, return write flag
-               bool setupHeader(std::shared_ptr<rogue::interfaces::memory::Transaction> tran, 
+               bool setupHeader(std::shared_ptr<rogue::interfaces::memory::Transaction> tran,
                                 uint32_t *header, uint32_t &frameLen, bool tx);
 
             public:
@@ -73,7 +68,7 @@ namespace rogue {
 
          };
 
-         // Convienence
+         // Convenience
          typedef std::shared_ptr<rogue::protocols::srp::SrpV3> SrpV3Ptr;
       }
    }

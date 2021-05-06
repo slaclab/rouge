@@ -1,33 +1,27 @@
-#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Title      : System display for rogue GUI
-#-----------------------------------------------------------------------------
-# File       : pyrogue/gui/variables.py
-# Author     : Ryan Herbst, rherbst@slac.stanford.edu
-# Created    : 2016-10-03
-# Last update: 2016-10-03
 #-----------------------------------------------------------------------------
 # Description:
 # Module for functions and classes related to variable display in the rogue GUI
 #-----------------------------------------------------------------------------
-# This file is part of the rogue software platform. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue software platform, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
-try:
-    from PyQt5.QtWidgets import *
-    from PyQt5.QtCore    import *
-    from PyQt5.QtGui     import *
-except ImportError:
-    from PyQt4.QtCore    import *
-    from PyQt4.QtGui     import *
+from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QPushButton, QComboBox, QFileDialog
+from PyQt5.QtWidgets import QLineEdit, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox
+from PyQt5.QtCore    import QObject, pyqtSlot, pyqtSignal, QCoreApplication, Qt
+from PyQt5.QtGui     import QPalette
 
 import pyrogue
 import datetime
+import json
+import time
+
 
 class DataLink(QObject):
 
@@ -56,9 +50,9 @@ class DataLink(QObject):
         fl.setLabelAlignment(Qt.AlignRight)
         vb.addLayout(fl)
 
-        self.writer.dataFile.addListener(self.varListener)
+        self.writer.DataFile.addListener(self.varListener)
         self.dataFile = QLineEdit()
-        self.dataFile.setText(self.writer.dataFile.valueDisp())
+        self.dataFile.setText(self.writer.DataFile.valueDisp())
         self.dataFile.textEdited.connect(self.dataFileEdited)
         self.dataFile.returnPressed.connect(self.dataFileChanged)
         self.updateDataFile.connect(self.dataFile.setText)
@@ -96,24 +90,24 @@ class DataLink(QObject):
         fl.setLabelAlignment(Qt.AlignRight)
         vbl.addLayout(fl)
 
-        self.writer.bufferSize.addListener(self.varListener)
+        self.writer.BufferSize.addListener(self.varListener)
         self.bufferSize = QLineEdit()
-        self.bufferSize.setText(self.writer.bufferSize.valueDisp())
+        self.bufferSize.setText(self.writer.BufferSize.valueDisp())
         self.bufferSize.textEdited.connect(self.bufferSizeEdited)
         self.bufferSize.returnPressed.connect(self.bufferSizeChanged)
         self.updateBufferSize.connect(self.bufferSize.setText)
         fl.addRow('Buffer Size:',self.bufferSize)
 
-        self.writer.isOpen.addListener(self.varListener)
+        self.writer.IsOpen.addListener(self.varListener)
         self.openState = QLineEdit()
-        self.openState.setText(self.writer.isOpen.valueDisp())
+        self.openState.setText(self.writer.IsOpen.valueDisp())
         self.openState.setReadOnly(True)
         self.updateOpenState.connect(self.openState.setText)
         fl.addRow('File Open:',self.openState)
 
-        self.writer.currentSize.addListener(self.varListener)
+        self.writer.CurrentSize.addListener(self.varListener)
         self.curSize = QLineEdit()
-        self.curSize.setText(self.writer.currentSize.valueDisp())
+        self.curSize.setText(self.writer.CurrentSize.valueDisp())
         self.curSize.setReadOnly(True)
         self.updateCurrentSize.connect(self.curSize.setText)
         fl.addRow('Current File Size:',self.curSize)
@@ -127,24 +121,24 @@ class DataLink(QObject):
         fl.setLabelAlignment(Qt.AlignRight)
         vbr.addLayout(fl)
 
-        self.writer.maxFileSize.addListener(self.varListener)
+        self.writer.MaxFileSize.addListener(self.varListener)
         self.maxSize = QLineEdit()
-        self.maxSize.setText(self.writer.maxFileSize.valueDisp())
+        self.maxSize.setText(self.writer.MaxFileSize.valueDisp())
         self.maxSize.textEdited.connect(self.maxSizeEdited)
         self.maxSize.returnPressed.connect(self.maxSizeChanged)
         self.updateMaxSize.connect(self.maxSize.setText)
         fl.addRow('Max Size:',self.maxSize)
 
-        self.writer.frameCount.addListener(self.varListener)
+        self.writer.FrameCount.addListener(self.varListener)
         self.frameCount = QLineEdit()
-        self.frameCount.setText(self.writer.frameCount.valueDisp())
+        self.frameCount.setText(self.writer.FrameCount.valueDisp())
         self.frameCount.setReadOnly(True)
         self.updateFrameCount.connect(self.frameCount.setText)
         fl.addRow('Frame Count:',self.frameCount)
 
-        self.writer.totalSize.addListener(self.varListener)
+        self.writer.TotalSize.addListener(self.varListener)
         self.totSize = QLineEdit()
-        self.totSize.setText(self.writer.totalSize.valueDisp())
+        self.totSize.setText(self.writer.TotalSize.valueDisp())
         self.totSize.setReadOnly(True)
         self.updateTotalSize.connect(self.totSize.setText)
         fl.addRow('Total File Size:',self.totSize)
@@ -152,7 +146,7 @@ class DataLink(QObject):
     @pyqtSlot()
     def browse(self):
         dlg = QFileDialog()
-        sug = datetime.datetime.now().strftime("data_%Y%m%d_%H%M%S.dat") 
+        sug = datetime.datetime.now().strftime("data_%Y%m%d_%H%M%S.dat")
 
         dataFile = dlg.getSaveFileName(options=QFileDialog.DontConfirmOverwrite, directory=sug, caption='Select data file', filter='Data Files(*.dat);;All Files(*.*)')
 
@@ -161,36 +155,42 @@ class DataLink(QObject):
             dataFile = dataFile[0]
 
         if dataFile != '':
-            self.writer.dataFile.setDisp(dataFile)
-    
+            try:
+                self.writer.DataFile.setDisp(dataFile)
+            except Exception as msg:
+                print(f"Got Exception: {msg}")
+
     def genName(self):
-        self.writer.autoName()
-        pass
+        try:
+            self.writer.AutoName()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
 
     def varListener(self,path,value):
-        if self.block: return
+        if self.block:
+            return
 
         name = path.split('.')[-1]
 
-        if name == 'dataFile':
+        if name == 'DataFile':
             self.updateDataFile.emit(value.valueDisp)
 
-        elif name == 'isOpen':
+        elif name == 'IsOpen':
             self.updateOpenState.emit(value.valueDisp)
 
-        elif name == 'bufferSize':
+        elif name == 'BufferSize':
             self.updateBufferSize.emit(value.valueDisp)
 
-        elif name == 'maxFileSize':
+        elif name == 'MaxFileSize':
             self.updateMaxSize.emit(value.valueDisp)
 
-        elif name == 'totalSize':
+        elif name == 'TotalSize':
             self.updateTotalSize.emit(value.valueDisp)
 
-        elif name == 'currentSize':
+        elif name == 'CurrentSize':
             self.updateCurrentSize.emit(value.valueDisp)
 
-        elif name == 'frameCount':
+        elif name == 'FrameCount':
             self.updateFrameCount.emit(value.valueDisp)
 
     @pyqtSlot()
@@ -206,16 +206,26 @@ class DataLink(QObject):
         self.dataFile.setPalette(p)
 
         self.block = True
-        self.writer.dataFile.setDisp(self.dataFile.text())
+        try:
+            self.writer.DataFile.setDisp(self.dataFile.text())
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
+
         self.block = False
 
     @pyqtSlot()
     def open(self):
-        self.writer.open()
+        try:
+            self.writer.Open()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
 
     @pyqtSlot()
     def close(self):
-        self.writer.close()
+        try:
+            self.writer.Close()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
 
     @pyqtSlot()
     def bufferSizeEdited(self):
@@ -230,7 +240,10 @@ class DataLink(QObject):
         self.bufferSize.setPalette(p)
 
         self.block = True
-        self.writer.bufferSize.setDisp(self.bufferSize.text())
+        try:
+            self.writer.BufferSize.setDisp(self.bufferSize.text())
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
         self.block = False
 
     @pyqtSlot()
@@ -246,7 +259,10 @@ class DataLink(QObject):
         self.maxSize.setPalette(p)
 
         self.block = True
-        self.writer.maxFileSize.setDisp(self.maxSize.text())
+        try:
+            self.writer.MaxFileSize.setDisp(self.maxSize.text())
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
         self.block = False
 
 
@@ -317,7 +333,8 @@ class ControlLink(QObject):
         fl.addRow('Run Count:',self.runCount)
 
     def varListener(self,path,value):
-        if self.block: return
+        if self.block:
+            return
 
         name = path.split('.')[-1]
 
@@ -333,13 +350,19 @@ class ControlLink(QObject):
     @pyqtSlot(int)
     def runStateChanged(self,value):
         self.block = True
-        self.control.runState.setDisp(self.runState.itemText(value))
+        try:
+            self.control.runState.setDisp(self.runState.itemText(value))
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
         self.block = False
 
     @pyqtSlot(int)
     def runRateChanged(self,value):
         self.block = True
-        self.control.runRate.setDisp(self.runRate.itemText(value))
+        try:
+            self.control.runRate.setDisp(self.runRate.itemText(value))
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
         self.block = False
 
 
@@ -398,13 +421,13 @@ class SystemWidget(QWidget):
         ###################
         # Data Controllers
         ###################
-        for key,val in root.getNodes(typ=pyrogue.DataWriter,hidden=True).items():
+        for key,val in root.getNodes(typ=pyrogue.DataWriter).items():
             self.holders.append(DataLink(layout=tl,writer=val))
 
         ###################
         # Run Controllers
         ###################
-        for key,val in root.getNodes(typ=pyrogue.RunControl,hidden=True).items():
+        for key,val in root.getNodes(typ=pyrogue.RunControl).items():
             self.holders.append(ControlLink(layout=tl,control=val))
 
         ###################
@@ -416,23 +439,72 @@ class SystemWidget(QWidget):
         vb = QVBoxLayout()
         gb.setLayout(vb)
 
-        self.systemLog = QTextEdit()
-        self.systemLog.setReadOnly(True)
+        self.systemLog = QTreeWidget()
         vb.addWidget(self.systemLog)
 
+        self.systemLog.setColumnCount(2)
+        self.systemLog.setHeaderLabels(['Field','Value'])
+        self.systemLog.setColumnWidth(0,200)
+
+        self.logCount = 0
+
+        self.updateLog.connect(self.updateSyslog)
         root.SystemLog.addListener(self.varListener)
-        self.updateLog.connect(self.systemLog.setText)
-        self.systemLog.setText(root.SystemLog.valueDisp())
-        
+
+        self.updateLog.emit(root.SystemLog.valueDisp())
+
         pb = QPushButton('Clear Log')
         pb.clicked.connect(self.resetLog)
         vb.addWidget(pb)
 
         QCoreApplication.processEvents()
 
+    @pyqtSlot(str)
+    def updateSyslog(self,value):
+        lst = json.loads(value)
+
+        if len(lst) == 0:
+            self.systemLog.clear()
+
+        elif len(lst) > self.logCount:
+            for i in range(self.logCount,len(lst)):
+                widget = QTreeWidgetItem(self.systemLog)
+                widget.setText(0, time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime(lst[i]['created'])))
+
+                widget.setText(1,lst[i]['message'])
+                widget.setExpanded(False)
+                widget.setTextAlignment(0,Qt.AlignTop)
+
+                temp = QTreeWidgetItem(widget)
+                temp.setText(0,'Name')
+                temp.setText(1,str(lst[i]['name']))
+                temp.setTextAlignment(0,Qt.AlignRight)
+
+                temp = QTreeWidgetItem(widget)
+                temp.setText(0,'Level')
+                temp.setText(1,'{} ({})'.format(lst[i]['levelName'],lst[i]['levelNumber']))
+                temp.setTextAlignment(0,Qt.AlignRight)
+
+                if lst[i]['exception'] is not None:
+                    exc = QTreeWidgetItem(widget)
+                    exc.setText(0,'exception')
+                    exc.setText(1,str(lst[i]['exception']))
+                    exc.setExpanded(False)
+                    exc.setTextAlignment(0,Qt.AlignRight)
+
+                    for v in lst[i]['traceBack']:
+                        temp = QTreeWidgetItem(exc)
+                        temp.setText(0,'')
+                        temp.setText(1,v)
+
+        self.logCount = len(lst)
+
     @pyqtSlot()
     def resetLog(self):
-        self.root.ClearLog()
+        try:
+            self.root.ClearLog()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
 
     def varListener(self,path,value):
         name = path.split('.')[-1]
@@ -442,33 +514,45 @@ class SystemWidget(QWidget):
 
     @pyqtSlot()
     def hardReset(self):
-        self.root.HardReset()
+        try:
+            self.root.HardReset()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
 
     @pyqtSlot()
     def initialize(self):
-        self.root.Initialize()
+        try:
+            self.root.Initialize()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
 
     @pyqtSlot()
     def countReset(self):
-        self.root.CountReset()
+        try:
+            self.root.CountReset()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
 
     @pyqtSlot()
     def loadSettings(self):
         dlg = QFileDialog()
 
-        loadFile = dlg.getOpenFileName(caption='Read config file', filter='Config Files(*.yml);;All Files(*.*)')
+        loadFile = dlg.getOpenFileNames(caption='Read config file', filter='Config Files(*.yml);;All Files(*.*)')
 
         # Detect QT5 return
         if isinstance(loadFile,tuple):
             loadFile = loadFile[0]
 
         if loadFile != '':
-            self.root.LoadConfig(loadFile)
+            try:
+                self.root.LoadConfig(loadFile)
+            except Exception as msg:
+                print(f"Got Exception: {msg}")
 
     @pyqtSlot()
     def saveSettings(self):
         dlg = QFileDialog()
-        sug = datetime.datetime.now().strftime("config_%Y%m%d_%H%M%S.yml") 
+        sug = datetime.datetime.now().strftime("config_%Y%m%d_%H%M%S.yml")
 
         saveFile = dlg.getSaveFileName(caption='Save config file', directory=sug, filter='Config Files(*.yml);;All Files(*.*)')
 
@@ -477,19 +561,24 @@ class SystemWidget(QWidget):
             saveFile = saveFile[0]
 
         if saveFile != '':
-            self.root.SaveConfig(saveFile)
+            try:
+                self.root.SaveConfig(saveFile)
+            except Exception as msg:
+                print(f"Got Exception: {msg}")
 
     @pyqtSlot()
     def saveState(self):
         dlg = QFileDialog()
-        sug = datetime.datetime.now().strftime("state_%Y%m%d_%H%M%S.yml") 
+        sug = datetime.datetime.now().strftime("state_%Y%m%d_%H%M%S.yml.zip")
 
-        stateFile = dlg.getSaveFileName(caption='Save State file', directory=sug, filter='State Files(*.yml);;All Files(*.*)')
+        stateFile = dlg.getSaveFileName(caption='Save State file', directory=sug, filter='State Files(*.yml *.yml.zip);;All Files(*.*)')
 
         # Detect QT5 return
         if isinstance(stateFile,tuple):
             stateFile = stateFile[0]
 
         if stateFile != '':
-            self.root.SaveState(stateFile)
-
+            try:
+                self.root.SaveState(stateFile)
+            except Exception as msg:
+                print(f"Got Exception: {msg}")

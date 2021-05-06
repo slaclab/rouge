@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+#-----------------------------------------------------------------------------
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
+# contained in the LICENSE.txt file.
+#-----------------------------------------------------------------------------
 
 import pyrogue
 import pyrogue.protocols.epics
@@ -23,10 +32,9 @@ class myDevice(pyrogue.Device):
 
 class LocalRoot(pyrogue.Root):
     def __init__(self):
-        pyrogue.Root.__init__(self, name='LocalRoot', description='Local root')
+        pyrogue.Root.__init__(self, name='LocalRoot', description='Local root', serverPort=None)
         my_device=myDevice()
         self.add(my_device)
-        self.start(zmqPort=None)
 
 class LocalRootWithEpics(LocalRoot):
     def __init__(self, use_map=False):
@@ -34,19 +42,15 @@ class LocalRootWithEpics(LocalRoot):
 
         if use_map:
             # PV map
-            pv_map = { self.myDevice.var.path       : epics_prefix+':LocalRoot:myDevice:var', \
-                       self.myDevice.var_float.path : epics_prefix+':LocalRoot:myDevice:var_float', \
+            pv_map = { 'LocalRoot.myDevice.var'       : epics_prefix+':LocalRoot:myDevice:var', \
+                       'LocalRoot.myDevice.var_float' : epics_prefix+':LocalRoot:myDevice:var_float', \
                     }
         else:
             pv_map=None
 
         self.epics=pyrogue.protocols.epics.EpicsCaServer(base=epics_prefix, root=self, pvMap=pv_map)
-        self.epics.start()
+        self.addProtocol(self.epics)
 
-    def stop(self):
-        self.epics.stop()
-        self.epics=None
-        pyrogue.Root.stop(self)
 
 def test_local_root():
     """
@@ -58,6 +62,7 @@ def test_local_root():
 
     for s in pv_map_states:
         with LocalRootWithEpics(use_map=s) as root:
+            time.sleep(1)
 
             # Device EPICS PV name prefix
             device_epics_prefix=epics_prefix+':LocalRoot:myDevice'
@@ -95,6 +100,7 @@ def test_local_root():
     try:
         root=pyrogue.Root(name='LocalRoot', description='Local root')
         root.epics=pyrogue.protocols.epics.EpicsCaServer(base=epics_prefix, root=root)
+        root.epics.start()
         raise AssertionError('Attaching a pyrogue.epics to a non-started tree did not throw exception')
     except Exception as e:
         pass
@@ -108,3 +114,4 @@ def test_local_root():
 
 if __name__ == "__main__":
     test_local_root()
+

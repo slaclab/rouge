@@ -1,35 +1,26 @@
-#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Title      : Command windows for GUI
-#-----------------------------------------------------------------------------
-# File       : pyrogue/gui/commands.py
-# Author     : Ryan Herbst, rherbst@slac.stanford.edu
-# Created    : 2016-10-03
-# Last update: 2016-10-03
 #-----------------------------------------------------------------------------
 # Description:
 # Module for functions and classes related to command display in the rogue GUI
 #-----------------------------------------------------------------------------
-# This file is part of the rogue software platform. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue software platform, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
-try:
-    from PyQt5.QtWidgets import *
-    from PyQt5.QtCore    import *
-    from PyQt5.QtGui     import *
-except ImportError:
-    from PyQt4.QtCore    import *
-    from PyQt4.QtGui     import *
+from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QPushButton, QComboBox, QSpinBox
+from PyQt5.QtWidgets import QLineEdit, QWidget, QVBoxLayout, QHBoxLayout
+from PyQt5.QtCore    import QObject, pyqtSlot, QCoreApplication, QEvent
 
 import pyrogue
 
+
 class CommandDev(QObject):
-    def __init__(self,*,tree,parent,dev,noExpand,top):
+    def __init__(self,*,tree,parent,dev,noExpand,top,incGroups,excGroups):
         QObject.__init__(self)
         self._parent   = parent
         self._tree     = tree
@@ -38,6 +29,8 @@ class CommandDev(QObject):
 
         self._widget = QTreeWidgetItem(parent)
         self._widget.setText(0,self._dev.name)
+        self._incGroups=incGroups
+        self._excGroups=excGroups
 
         if top:
             self._parent.addTopLevelItem(self._widget)
@@ -57,20 +50,30 @@ class CommandDev(QObject):
         if self._dummy is None or not self._widget.isExpanded():
             return
 
+        self._tree.setUpdatesEnabled(False)
         self._widget.removeChild(self._dummy)
         self._dummy = None
         self.setup(True)
+        self._tree.setUpdatesEnabled(True)
 
     def setup(self,noExpand):
 
         # First create commands
-        for key,val in self._dev.visableCommands.items():
-            self._children.append(CommandLink(tree=self._tree,parent=self._widget,command=val))
+        for key,val in self._dev.commandsByGroup(incGroups=self._incGroups,excGroups=self._excGroups).items():
+            self._children.append(CommandLink(tree=self._tree,
+                                              parent=self._widget,
+                                              command=val))
             QCoreApplication.processEvents()
 
         # Then create devices
-        for key,val in self._dev.visableDevices.items():
-            self._children.append(CommandDev(tree=self._tree,parent=self._widget,dev=val,noExpand=noExpand,top=False))
+        for key,val in self._dev.devicesByGroup(incGroups=self._incGroups,excGroups=self._excGroups).items():
+            self._children.append(CommandDev(tree=self._tree,
+                                             parent=self._widget,
+                                             dev=val,
+                                             noExpand=noExpand,
+                                             top=False,
+                                             incGroups=self._incGroups,
+                                             excGroups=self._excGroups))
 
         for i in range(0,4):
             self._tree.resizeColumnToContents(i)
@@ -102,12 +105,14 @@ class CommandLink(QObject):
                 for i in self._command.enum:
                     self._widget.addItem(self._command.enum[i])
                 self._widget.setCurrentIndex(self._widget.findText(self._command.valueDisp()))
+                self._widget.installEventFilter(self)
 
             elif self._command.minimum is not None and self._command.maximum is not None:
-                self._widget = QSpinBox();
+                self._widget = QSpinBox()
                 self._widget.setMinimum(self._command.minimum)
                 self._widget.setMaximum(self._command.maximum)
                 self._widget.setValue(self._command.value())
+                self._widget.installEventFilter(self)
 
             else:
                 self._widget = QLineEdit()
@@ -122,13 +127,20 @@ class CommandLink(QObject):
         else:
             value=None
 
-        if self._command.arg:
-            try:
-                self._command.call(self._command.parseDisp(value))
-            except Exception:
-                pass
+        try:
+            if self._command.arg:
+                self._command(self._command.parseDisp(value))
+            else:
+                self._command()
+        except Exception as msg:
+            print(f"Got Exception: {msg}")
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Wheel:
+            return True
         else:
-            self._command.call()
+            return False
+
 
 class CommandWidget(QWidget):
     def __init__(self, *, parent=None):
@@ -150,9 +162,14 @@ class CommandWidget(QWidget):
 
         self.devTop = None
 
-    @pyqtSlot(pyrogue.Root)
-    @pyqtSlot(pyrogue.VirtualNode)
-    def addTree(self,root):
+    @pyqtSlot(pyrogue.Root,list,list)
+    @pyqtSlot(pyrogue.interfaces.VirtualNode,list,list)
+    def addTree(self,root,incGroups,excGroups):
         self.roots.append(root)
-        self._children.append(CommandDev(tree=self.tree,parent=self.tree,dev=root,noExpand=False,top=True))
-
+        self._children.append(CommandDev(tree=self.tree,
+                                         parent=self.tree,
+                                         dev=root,
+                                         noExpand=False,
+                                         top=True,
+                                         incGroups=incGroups,
+                                         excGroups=excGroups))

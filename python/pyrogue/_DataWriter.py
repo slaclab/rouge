@@ -1,27 +1,16 @@
-#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Title      : PyRogue base module - Data Writer Class
 #-----------------------------------------------------------------------------
-# File       : pyrogue/_DataWriter.py
-# Created    : 2017-05-16
-#-----------------------------------------------------------------------------
-# This file is part of the rogue software platform. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue software platform, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
-import rogue.interfaces.memory as rim
-import collections
 import datetime
-import functools as ft
 import pyrogue as pr
-import inspect
-import threading
-import math
-import time
 
 
 class DataWriter(pr.Device):
@@ -33,29 +22,30 @@ class DataWriter(pr.Device):
         pr.Device.__init__(self, hidden=hidden, **kwargs)
 
         self.add(pr.LocalVariable(
-            name='dataFile',
+            name='DataFile',
             mode='RW',
             value='',
             description='Data file for storing frames for connected streams.'))
 
         self.add(pr.LocalCommand(
-            name='open',
+            name='Open',
             function=self._open,
             description='Open data file.'))
 
         self.add(pr.LocalCommand(
-            name='close',
+            name='Close',
             function=self._close,
             description='Close data file.'))
 
         self.add(pr.LocalVariable(
-            name='isOpen',
+            name='IsOpen',
+            mode='RO',
             value=False,
             localGet=self._isOpen,
             description='Data file is open.'))
 
         self.add(pr.LocalVariable(
-            name='bufferSize',
+            name='BufferSize',
             mode='RW',
             value=0,
             typeStr='UInt32',
@@ -63,7 +53,7 @@ class DataWriter(pr.Device):
             description='File buffering size. Enables caching of data before call to file system.'))
 
         self.add(pr.LocalVariable(
-            name='maxFileSize',
+            name='MaxFileSize',
             mode='RW',
             value=0,
             typeStr='UInt64',
@@ -71,7 +61,7 @@ class DataWriter(pr.Device):
             description='Maximum size for an individual file. Setting to a non zero splits the run data into multiple files.'))
 
         self.add(pr.LocalVariable(
-            name='currentSize',
+            name='CurrentSize',
             mode='RO',
             value=0,
             typeStr='UInt64',
@@ -80,7 +70,7 @@ class DataWriter(pr.Device):
             description='Size of current data files(s) for current open session in bytes.'))
 
         self.add(pr.LocalVariable(
-            name='totalSize',
+            name='TotalSize',
             mode='RO',
             value=0,
             typeStr='UInt64',
@@ -89,7 +79,7 @@ class DataWriter(pr.Device):
             description='Size of all data sub-files(s) for current open session in bytes.'))
 
         self.add(pr.LocalVariable(
-            name='frameCount',
+            name='FrameCount',
             mode='RO',
             value=0,
             typeStr='UInt32',
@@ -98,7 +88,7 @@ class DataWriter(pr.Device):
             description='Frame in data file(s) for current open session in bytes.'))
 
         self.add(pr.LocalCommand(
-            name='autoName',
+            name='AutoName',
             function=self._genFileName,
             description='Auto create data file name using data and time.'))
 
@@ -139,12 +129,11 @@ class DataWriter(pr.Device):
         Auto create data file name based upon date and time.
         Preserve file's location in path.
         """
-        idx = self.dataFile.value().rfind('/')
+        idx = self.DataFile.value().rfind('/')
 
         if idx < 0:
             base = ''
         else:
-            base = self.dataFile.value()[:idx+1]
+            base = self.DataFile.value()[:idx+1]
 
-        self.dataFile.set(base + datetime.datetime.now().strftime("data_%Y%m%d_%H%M%S.dat")) 
-
+        self.DataFile.set(base + datetime.datetime.now().strftime("data_%Y%m%d_%H%M%S.dat"))

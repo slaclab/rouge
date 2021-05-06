@@ -4,7 +4,7 @@
 Wrapping Custom Module With PyRogue Device
 ==========================================
 
-The following demonstrates the implemenation of a PyRogue Device wrapper for
+The following demonstrates the implementation of a PyRogue Device wrapper for
 the classes contained within the :ref:`custom_sourcefile`. The variables and commands
 associated with the custom module are exposed to the PyRogue management layer. This
 file can be created as MyWrapper.py and included in the same python directory as
@@ -37,9 +37,14 @@ the output of the :ref:`custom_makefile` step.
                                          mode='RO', pollInterval=1, value=0,
                                          localGet=self._mySlave.getTotalBytes))
 
-      # Method called by streamConnect, streamTap and streamConnectBiDir to access slave
+      # Method called by streamConnect and streamConnectBiDir to access slave
       def _getStreamSlave(self):
           return self._mySlave
+
+      # Support << operator
+      def __lshift__(self, other):
+          pyrogue.streamConnect(other,self)
+          return other
 
    class MyCustomMaster(pyrogue.Device):
 
@@ -70,7 +75,12 @@ the output of the :ref:`custom_makefile` step.
           self.add(pyrogue.LocalCommand(name='MyFrameGen',description='Generate a single frame',
                                         function=self._myMast.myFrameGen))
 
-      # Method called by streamConnect, streamTap and streamConnectBiDir to access master
+      # Method called by streamConnect and streamConnectBiDir to access master
       def _getStreamMaster(self):
           return self._myMast
+
+      # Support >> operator
+      def __rshift__(self, other):
+          pyrogue.streamConnect(self,other)
+          return other
 

@@ -2,15 +2,12 @@
 #-----------------------------------------------------------------------------
 # Title      : Data over stream bridge test script
 #-----------------------------------------------------------------------------
-# File       : test_streamBridge.py
-# Created    : 2019-01-30
-#-----------------------------------------------------------------------------
-# This file is part of the rogue_example software. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue_example software, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue_example software. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue_example software, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
 import rogue.interfaces.stream
@@ -33,10 +30,7 @@ def fifo_path():
     fifo = rogue.interfaces.stream.Fifo(0,0,False);
 
     # Client stream
-    pyrogue.streamConnect(prbsTx,fifo)
-
-    # Server stream
-    pyrogue.streamConnect(fifo,prbsRx)
+    prbsTx >> fifo >> prbsRx
 
     print("Generating Frames")
     for _ in range(FrameCount):

@@ -28,6 +28,7 @@
 
 namespace rpe = rogue::protocols::epicsV3;
 
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 
@@ -35,14 +36,14 @@ namespace bp  = boost::python;
 void rpe::Server::setup_python() {
 
    bp::class_<rpe::Server, rpe::ServerPtr, boost::noncopyable >("Server",bp::init<uint32_t>())
-      .def("addValue", &rpe::Server::addValue)
-      .def("start",    &rpe::Server::start)
-      .def("stop",     &rpe::Server::stop)
+      .def("_addValue", &rpe::Server::addValue)
+      .def("_start",    &rpe::Server::start)
+      .def("_stop",     &rpe::Server::stop)
    ;
 }
 
 //! Class creation
-rpe::Server::Server (uint32_t count) : caServer(), running_(false) { 
+rpe::Server::Server (uint32_t count) : caServer(), running_(false) {
    workCnt_ = count;
    workersEn_ = false;
    threadEn_  = false;
@@ -76,9 +77,14 @@ void rpe::Server::start() {
    threadEn_ = true;
    thread_ = new std::thread(&rpe::Server::runThread, this);
 
+   // Set a thread name
+#ifndef __MACH__
+   pthread_setname_np( thread_->native_handle(), "EpicsV3Server" );
+#endif
+
    if ( workCnt_ > 0 ) {
       workersEn_ = true;
-      for (x=0; x < workCnt_; x++) 
+      for (x=0; x < workCnt_; x++)
          workers_[x] = new std::thread(boost::bind(&rpe::Server::runWorker, this));
    }
    running_ = true;
@@ -92,7 +98,7 @@ void rpe::Server::stop() {
    if (running_) {
       rogue::GilRelease noGil;
 
-      for (x=0; x < workCnt_; x++) 
+      for (x=0; x < workCnt_; x++)
          workQueue_.push(std::shared_ptr<rogue::protocols::epicsV3::Work>());
 
       workersEn_ = false;

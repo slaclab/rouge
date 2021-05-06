@@ -1,20 +1,17 @@
-#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Title      : PyRogue base module - Model Class
 #-----------------------------------------------------------------------------
-# File       : pyrogue/_Model.py
-# Created    : 2016-09-29
-#-----------------------------------------------------------------------------
-# This file is part of the rogue software platform. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue software platform, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
-import pyrogue as pr
-import struct
+
+import rogue.interfaces.memory as rim
+
 
 def wordCount(bits, wordSize):
     ret = bits // wordSize
@@ -22,8 +19,10 @@ def wordCount(bits, wordSize):
         ret += 1
     return ret
 
+
 def byteCount(bits):
     return wordCount(bits, 8)
+
 
 def reverseBits(value, bitSize):
     result = 0
@@ -33,220 +32,419 @@ def reverseBits(value, bitSize):
         value >>= 1
     return result
 
-# class ModelMeta(type):
-#     def __init__(cls, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         cls.cache = {}
 
-#     def __call__(cls, *args, **kwargs):
-#         key = str(args) + str(kwargs)
-#         if key not in cls.cache:
-#             inst = super().__call__(*args, **kwargs)
-#             cls.cache[key] = inst
-#         return cls.cache[key]
+def twosComplement(value, bitSize):
+    """compute the 2's complement of int value"""
+    if (value & (1 << (bitSize - 1))) != 0: # if sign bit is set e.g., 8bit: 128-255
+        value = value - (1 << bitSize)      # compute negative value
+    return value                            # return positive value as is
 
-# # Python magic so that only one instance of each Model 
-# # with a specific set of args is ever created
-# class Model(metaclass=ModelMeta):
-#     pass
-class Model(object):
 
-    @staticmethod
-    def getMask(bitSize):
-        # For now all models are little endian so we can get away with this
-        i = (2**bitSize-1)
-        return i.to_bytes(byteCount(bitSize), 'little', signed=False)
+class ModelMeta(type):
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cls.subclasses = {}
 
-    @classmethod
-    def mask(cls, ba, bitSize):
-        #m = cls.getMask(bitSize)
-        #for i in range(len(ba)):
-            #ba[i] = ba[i] & m[i]
-        return ba
+    def __call__(cls, *args, **kwargs):
+        key = cls.__name__ + str(args) + str(kwargs)
+
+        if key not in cls.subclasses:
+            #print(f'Key: {key}')
+            inst = super().__call__(*args, **kwargs)
+            cls.subclasses[key] = inst
+        return cls.subclasses[key]
+
+
+class Model(object, metaclass=ModelMeta):
+    """
+    Class which describes how a data type is represented and accessed
+    using the Rogue Variables and Blocks
+
+    Parameters
+    ----------
+    bitSize : int
+        Number of bits being represented
+
+    binPoint : int
+        Huh?
+
+    Attributes
+    ----------
+    name: str
+        String representation of the Model type
+
+    fstring: str
+        Not sure what this is, Where is it used?
+
+    encoding: str
+        Encoding type for converting between string and byte arrays. i.e. UTF-8
+
+    pytype: int
+        Python type class.
+
+    defaultdisp: str
+        Default display formatting string. May be overriden by the Variable disp parameter.
+
+    signed: bool
+        Flag indicating if value is signed. Default=False
+
+    endianness: str
+        Endianness indicator. 'little' or 'big'. Default='little'
+
+    bitReverse: bool
+        Bit reversal flag.
+
+    modelId: int
+        Block processing ID. See :ref:`interfaces_memory_constants_ptype`
+
+    isBigEndian: bool
+        True if endianness = 'big'
+
+    """
+
+    fstring     = None
+    encoding    = None
+    pytype      = None
+    defaultdisp = '{}'
+    signed      = False
+    endianness  = 'little'
+    bitReverse  = False
+    modelId     = rim.PyFunc
+
+    def __init__(self, bitSize, binPoint=0):
+        self.binPoint = binPoint
+        self.bitSize  = bitSize
+        self.name     = self.__class__.__name__
+
+    @property
+    def isBigEndian(self):
+        return self.endianness == 'big'
+
+    def toBytes(self, value):
+        """
+        Convert the python value to byte array.
+
+        Parameters
+        ----------
+        value: obj
+            Python value to convert
+
+        Returns
+        -------
+        bytearray : Byte array representation of value
+        """
+        return None
+
+    # Called by raw read/write and when bitsize > 64
+    def fromBytes(self, ba):
+        """
+        Convert the python value to byte array.
+
+        Parameters
+        ----------
+        ba: bytearray
+            Byte array to extract value from
+
+        Returns
+        -------
+        obj : Converted python value
+        """
+        return None
+
+    def fromString(self, string):
+        """
+        Convert the string to a python value.
+
+        Parameters
+        ----------
+        string: str
+            String representation of the value
+
+        Returns
+        -------
+        obj : Converted python value
+        """
+        return None
+
+    def minValue(self):
+        """
+        Return the minimum value for the Model type
+
+        Returns
+        -------
+        obj: Minimum value
+        """
+        return None
+
+    def maxValue(self):
+        """
+        Return the maximum value for the Model type
+
+        Returns
+        -------
+        obj: Maximum value
+        """
+        return None
+
 
 class UInt(Model):
-    """Converts Unsigned Integer to and from bytearray"""
-#     def __init__(self, numBits=1, signed=False, endianness='little'):
-#         self.numBits = numBits
-#         self.numBytes = byteCount(numBits)
-#         self.defaultdisp = '{:x}'
-#         self.signed = signed
-#         self.endianness = endianness
+    """
+    Model class for unsigned integers
 
-#     def clone(self, numBits):
-#         return IntModel(numBits, self.signed, self.endianness)
+    Parameters
+    ----------
+    bitSize : int
+        Number of bits being represented
+    """
+
+    pytype      = int
     defaultdisp = '{:#x}'
-    pytype = int
+    modelId     = rim.UInt
 
-    @staticmethod
-    def check(value,bitSize):
-        return (type(value) == UInt.pytype and bitSize >= value.bit_length())
+    def __init__(self, bitSize):
+        super().__init__(bitSize)
+        self.name = f'{self.__class__.__name__}{self.bitSize}'
 
-    @classmethod
-    def toBytes(cls, value, bitSize):
-        return value.to_bytes(byteCount(bitSize), 'little', signed=False)
+    # Called by raw read/write and when bitsize > 64
+    def toBytes(self, value):
+        return value.to_bytes(byteCount(self.bitSize), self.endianness, signed=self.signed)
 
-    @classmethod
-    def fromBytes(cls, ba, bitSize):
-        return int.from_bytes(ba, 'little', signed=False)
+    # Called by raw read/write and when bitsize > 64
+    def fromBytes(self, ba):
+        return int.from_bytes(ba, self.endianness, signed=self.signed)
 
-
-    @staticmethod
-    def fromString(string, bitSize):
+    def fromString(self, string):
         return int(string, 0)
 
+    def minValue(self):
+        return 0
 
-    @classmethod
-    def name(cls, bitSize):
-        return '{}{}'.format(cls.__name__, bitSize)
+    def maxValue(self):
+        return (2**self.bitSize)-1
+
 
 class UIntReversed(UInt):
-    """Converts Unsigned Integer to and from bytearray with reserved bit ordering"""
+    """
+    Model class for unsigned integers, stored in reverse bit order
+    """
 
-    @classmethod
-    def toBytes(cls, value, bitSize):
-        valueReverse = reverseBits(value,bitSize)
-        return super().toBytes(valueReverse, bitSize)
+    modelId   = rim.PyFunc # Not yet supported
+    bitReverse = True
 
-    @classmethod
-    def fromBytes(cls, ba, bitSize):
-        valueReverse = super().fromBytes(ba, bitSize)
-        return reverseBits(valueReverse,bitSize)
+    def toBytes(self, value):
+        valueReverse = reverseBits(value, self.bitSize)
+        return valueReverse.to_bytes(byteCount(self.bitSize), self.endianness, signed=self.signed)
 
-class Int(Model):
+    def fromBytes(self, ba):
+        valueReverse = int.from_bytes(ba, self.endianness, signed=self.signed)
+        return reverseBits(valueReverse, self.bitSize)
 
+
+class Int(UInt):
+    """
+    Model class for integers
+    """
+
+    # Override these and inherit everything else from UInt
     defaultdisp = '{:d}'
-    pytype = int
+    signed      = True
+    modelId     = rim.Int
 
-    @staticmethod
-    def check(value,bitSize):
-        return (type(value) == Int.pytype and bitSize >= value.bit_length())
-
-    @classmethod
-    def toBytes(cls, value, bitSize):
-        if (value < 0) and (bitSize < (byteCount(bitSize) * 8)):
-            newValue = value & (2**(bitSize)-1) # Strip upper bits
-            ba = newValue.to_bytes(byteCount(bitSize), 'little', signed=False)
+    # Called by raw read/write and when bitsize > 64
+    def toBytes(self, value):
+        if (value < 0) and (self.bitSize < (byteCount(self.bitSize) * 8)):
+            newValue = value & (2**(self.bitSize)-1) # Strip upper bits
+            ba = newValue.to_bytes(byteCount(self.bitSize), self.endianness, signed=False)
         else:
-            ba = value.to_bytes(byteCount(bitSize), 'little', signed=True)
+            ba = value.to_bytes(byteCount(self.bitSize), self.endianness, signed=True)
 
         return ba
 
-    @classmethod
-    def fromBytes(cls,ba,bitSize):
-        if (bitSize < (byteCount(bitSize)*8)):
-            value = int.from_bytes(ba, 'little', signed=False)
+    # Called by raw read/write and when bitsize > 64
+    def fromBytes(self,ba):
+        if (self.bitSize < (byteCount(self.bitSize)*8)):
+            value = int.from_bytes(ba, self.endianness, signed=False)
 
-            if value >= 2**(bitSize-1):
-                value -= 2**bitSize
+            if value >= 2**(self.bitSize-1):
+                value -= 2**self.bitSize
 
         else:
-            value = int.from_bytes(ba, 'little', signed=True)
+            value = int.from_bytes(ba, self.endianness, signed=True)
 
-        return value
+        return
 
-    @staticmethod
-    def fromString(string, bitSize):
+    def fromString(self, string):
         i = int(string, 0)
         # perform twos complement if necessary
-        if i>0 and ((i >> bitSize) & 0x1 == 1):
-            i = i - (1 << bitSize)
+        if i>0 and ((i >> self.bitSize) & 0x1 == 1):
+            i = i - (1 << self.bitSize)
         return i
 
-    @classmethod
-    def name(cls, bitSize):
-        return '{}{}'.format(cls.__name__, bitSize)
+    def minValue(self):
+        return -1 * ((2**(self.bitSize-1))-1)
+
+    def maxValue(self):
+        return (2**(self.bitSize-1))-1
+
+
+class UIntBE(UInt):
+    """
+    Model class for big endian unsigned integers
+    """
+
+    endianness = 'big'
+
+
+class IntBE(Int):
+    """
+    Model class for big endian integers
+    """
+
+    endianness = 'big'
+
 
 class Bool(Model):
-    
+    """
+    Model class for booleans
+
+    Parameters
+    ----------
+    bitSize : int
+        Number of bits being represented
+    """
+
+    pytype      = bool
     defaultdisp = {False: 'False', True: 'True'}
-    pytype = bool
+    modelId     = rim.Bool
 
-    @staticmethod
-    def check(value,bitSize):
-        return (type(value) == Bool.pytype and bitSize == 1)
+    def __init__(self, bitSize):
+        assert bitSize == 1, f"The bitSize param of Model {self.__class__.__name__} must be 1"
+        super().__init__(bitSize)
 
-    @classmethod
-    def toBytes(cls, value, bitSize):
-        return value.to_bytes(1, 'little', signed=False)
-
-    @classmethod
-    def fromBytes(cls, ba, bitSize):
-        return bool(int.from_bytes(ba, 'little', signed=False))
-
-    @staticmethod
-    def fromString(string, bitSize):
+    def fromString(self, string):
         return str.lower(string) == "true"
 
-    @classmethod
-    def name(cls, bitSize):
-        return '{}'.format(cls.__name__)
-    
-        
+    def minValue(self):
+        return 0
+
+    def maxValue(self):
+        return 1
+
+
 class String(Model):
+    """
+    Model class for strings
 
-    encoding = 'utf-8'
+    Parameters
+    ----------
+    bitSize : int
+        Number of bits being represented
+    """
+
+    encoding    = 'utf-8'
     defaultdisp = '{}'
-    pytype = str
+    pytype      = str
+    modelId     = rim.String
 
-    @staticmethod
-    def check(value,bitSize):
-        return (type(val) == String.pytype and bitSize >= (len(value) * 8))
+    def __init__(self, bitSize):
+        super().__init__(bitSize)
+        self.name = f'{self.__class__.__name__}({self.bitSize//8})'
 
-    @classmethod
-    def toBytes(cls, value, bitSize):
-        ba = bytearray(value, String.encoding)
-        ba.extend(bytearray(1))
-        return ba
-
-    @classmethod
-    def fromBytes(cls, ba, bitSize):
-        s = ba.rstrip(bytearray(1))
-        return s.decode(String.encoding)
-
-    @staticmethod
-    def fromString(string, bitSize):
+    def fromString(self, string):
         return string
-
-    @classmethod
-    def name(cls, bitSize):
-        return '{}'.format(cls.__name__)
 
 
 class Float(Model):
-    """Converter for 32-bit float"""
+    """
+    Model class for 32-bit floats
+
+    Parameters
+    ----------
+    bitSize : int
+        Number of bits being represented, must be 32
+    """
 
     defaultdisp = '{:f}'
-    pytype = float
-#    endianness='little'
-#    fstring = 'f' # use '!f' for big endian
+    pytype      = float
+    fstring     = 'f'
+    modelId     = rim.Float
 
-    @staticmethod
-    def check(value,bitSize):
-        return (type(val) == Float.pytype and (bitSize == 32 or bitSize == 64))
+    def __init__(self, bitSize):
+        assert bitSize == 32, f"The bitSize param of Model {self.__class__.__name__} must be 32"
+        super().__init__(bitSize)
+        self.name = f'{self.__class__.__name__}{self.bitSize}'
 
-    @classmethod
-    def toBytes(cls, value, bitSize):
-        if bitSize == 32:
-            fstring = 'f'
-        elif bitsize == 64:
-            fstring = 'd'
-        return bytearray(struct.pack(fstring, value))
-
-    @classmethod
-    def fromBytes(cls, ba, bitSize):
-        if len(ba) == 4:
-            return struct.unpack('f', ba)
-        elif len(ba) == 8:
-            return struct.unpack('d', ba)
-
-        # Need better error handling
-        return struct.unpack('d', ba)        
-
-    @staticmethod
-    def fromString(string, bitSize):
+    def fromString(self, string):
         return float(string)
 
-    @classmethod
-    def name(cls, bitSize):
-        return '{}{}'.format(cls.__name__, bitSize)
+    def minValue(self):
+        return -3.4e38
+
+    def maxValue(self):
+        return 3.4e38
+
+
+class Double(Float):
+    """
+    Model class for 64-bit floats
+
+    Parameters
+    ----------
+    bitSize : int
+        Number of bits being represented, must be 64
+    """
+
+    fstring = 'd'
+    modelId   = rim.Double
+
+    def __init__(self, bitSize):
+        assert bitSize == 64, f"The bitSize param of Model {self.__class__.__name__} must be 64"
+        super().__init__(bitSize)
+        self.name = f'{self.__class__.__name__}{self.bitSize}'
+
+    def minValue(self):
+        return -1.80e308
+
+    def maxValue(self):
+        return 1.80e308
+
+
+class FloatBE(Float):
+    """
+    Model class for 32-bit floats stored as big endian
+    """
+
+    endianness = 'big'
+    fstring = '!f'
+
+
+class DoubleBE(Double):
+    """
+    Model class for 64-bit floats stored as big endian
+    """
+
+    endianness = 'big'
+    fstring = '!d'
+
+
+class Fixed(Model):
+    """
+    Model class for fixed point signed integers
+
+    Parameters
+    ----------
+    bitSize : int
+        Number of bits being represented
+
+    binPoint : int
+        Huh?
+    """
+
+    pytype = float
+    signed = True
+    modelId   = rim.Fixed
+
+    def __init__(self, bitSize, binPoint):
+        super().__init__(bitSize,binPoint)
+
+        self.name = f'Fixed_{self.sign}_{self.bitSize}_{self.binPoint}'

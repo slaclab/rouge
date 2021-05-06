@@ -13,7 +13,7 @@
  *    write to a common data file. The data file is a series of banks.
  *    Each bank has a channel and frame flags. The channel is per source and the
  *    lower 24 bits of the frame flags are used as the flags.
- *    The bank is preceeded by 2 - 32-bit headers to indicate bank information
+ *    The bank is proceeded by 2 - 32-bit headers to indicate bank information
  *    and length:
  *
  *       headerA:
@@ -24,12 +24,12 @@
  *          15:0   = Frame flags
  *
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -52,6 +52,7 @@ namespace ris = rogue::interfaces::stream;
 namespace ruf = rogue::utilities::fileio;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp = boost::python;
 #endif
@@ -93,12 +94,13 @@ ruf::StreamWriter::StreamWriter() {
    frameCount_ = 0;
    currBuffer_ = 0;
    dropErrors_ = false;
+   isOpen_     = false;
 
    log_ = rogue::Logging::create("fileio.StreamWriter");
 }
 
 //! Deconstructor
-ruf::StreamWriter::~StreamWriter() { 
+ruf::StreamWriter::~StreamWriter() {
    this->close();
 }
 
@@ -108,6 +110,7 @@ void ruf::StreamWriter::open(std::string file) {
 
    rogue::GilRelease noGil;
    std::lock_guard<std::mutex> lock(mtx_);
+   isOpen_ = false;
    flush();
 
    // Close if open
@@ -121,7 +124,7 @@ void ruf::StreamWriter::open(std::string file) {
    if ( sizeLimit_ > 0 ) name.append(".1");
 
    if ( (fd_ = ::open(name.c_str(),O_RDWR|O_CREAT|O_APPEND,S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) < 0 )
-      throw(rogue::GeneralError::open("StreamWriter::open",name));
+      throw(rogue::GeneralError::create("StreamWriter::open","Failed to open data file: %s",name.c_str()));
 
    totSize_    = 0;
    currSize_   = 0;
@@ -132,12 +135,14 @@ void ruf::StreamWriter::open(std::string file) {
    for (std::map<uint32_t,ruf::StreamWriterChannelPtr>::iterator it=channelMap_.begin(); it!=channelMap_.end(); ++it) {
      it->second->setFrameCount(0);
    }
+   isOpen_ = true;
 }
 
 //! Close a data file
 void ruf::StreamWriter::close() {
    rogue::GilRelease noGil;
    std::lock_guard<std::mutex> lock(mtx_);
+   isOpen_ = false;
    flush();
    if ( fd_ >= 0 ) ::close(fd_);
    fd_ = -1;
@@ -145,7 +150,7 @@ void ruf::StreamWriter::close() {
 
 //! Get open status
 bool ruf::StreamWriter::isOpen() {
-   return ( fd_ >= 0 );
+   return ( isOpen_ );
 }
 
 //! Set buffering size, 0 to disable
@@ -168,7 +173,7 @@ void ruf::StreamWriter::setBufferSize(uint32_t size) {
 
          // Create new buffer
          if ( (buffer_ = (uint8_t *)malloc(size)) == NULL )
-            throw(rogue::GeneralError::allocation("StreamWriter::setBufferSize",size));
+            throw(rogue::GeneralError::create("StreamWriter::setBufferSize","Failed to allocate buffer with size = %i",size));
          buffSize_ = size;
       }
    }
@@ -228,21 +233,21 @@ bool ruf::StreamWriter::waitFrameCount(uint32_t count, uint64_t timeout) {
 
       div_t divResult = div(timeout,1000000);
       sumTime.tv_sec  = divResult.quot;
-      sumTime.tv_usec = divResult.rem;       
+      sumTime.tv_usec = divResult.rem;
 
       timeradd(&curTime,&sumTime,&endTime);
    }
-  
+
    while (frameCount_ < count) {
       cond_.wait_for(lock, std::chrono::microseconds(1000));
 
       if ( timeout != 0 ) {
          gettimeofday(&curTime,NULL);
-         if ( timercmp(&curTime,&endTime,>) ) return false;
+         if ( timercmp(&curTime,&endTime,>) ) break;
       }
    }
 
-   return true;
+   return (frameCount_ >= count);
 }
 
 //! Write data to file. Called from StreamWriterChannel
@@ -274,7 +279,7 @@ void ruf::StreamWriter::writeFile ( uint8_t channel, std::shared_ptr<rogue::inte
       intWrite(&value,4);
 
       // Write buffers
-      for (it=frame->beginBuffer(); it != frame->endBuffer(); ++it) 
+      for (it=frame->beginBuffer(); it != frame->endBuffer(); ++it)
          intWrite((*it)->begin(),(*it)->getPayload());
 
       // Update counters
@@ -292,7 +297,7 @@ void ruf::StreamWriter::intWrite(void *data, uint32_t size) {
    if ( (size + currBuffer_) > buffSize_ ) flush();
 
    // Attempted write is larger than buffer, raw write
-   // This is called if bufer is disabled
+   // This is called if buffer is disabled
    if ( size > buffSize_ ) {
       if (write(fd_,data,size) != (int32_t)size) {
          ::close(fd_);
@@ -319,7 +324,7 @@ void ruf::StreamWriter::checkSize(uint32_t size) {
    if ( sizeLimit_ == 0 ) return;
 
    // Bad configuration
-   if ( size > sizeLimit_ ) 
+   if ( size > sizeLimit_ )
       throw(rogue::GeneralError("StreamWriter::checkSize","Frame size is larger than file size limit"));
 
    // File size (including buffer) is larger than max size
@@ -334,7 +339,7 @@ void ruf::StreamWriter::checkSize(uint32_t size) {
 
       // Open new file
       if ( (fd_ = ::open(name.c_str(),O_RDWR|O_CREAT|O_APPEND,S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) < 0 )
-         throw(rogue::GeneralError::open("StreamWriter::checkSize",name));
+         throw(rogue::GeneralError::create("StreamWriter::checkSize","Failed to open file %s",name.c_str()));
 
       currSize_ = 0;
    }

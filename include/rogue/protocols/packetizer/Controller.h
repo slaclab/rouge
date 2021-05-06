@@ -2,19 +2,15 @@
  *-----------------------------------------------------------------------------
  * Title      : Packetizer Controller Class
  * ----------------------------------------------------------------------------
- * File       : Controller.h
- * Created    : 2017-01-07
- * Last update: 2017-01-07
- * ----------------------------------------------------------------------------
  * Description:
  * Packetizer Controller
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -85,6 +81,9 @@ namespace rogue {
 
                //! Stop transmit queue
                void stopQueue();
+
+               //! Stop
+               void stop();
 
                //! Interface for transport transmitter thread
                std::shared_ptr<rogue::interfaces::stream::Frame> transportTx ();

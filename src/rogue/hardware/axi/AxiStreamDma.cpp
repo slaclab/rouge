@@ -8,12 +8,12 @@
  * Description:
  * Class for interfacing to AxiStreamDma Driver.
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -23,6 +23,7 @@
 #include <rogue/interfaces/stream/FrameLock.h>
 #include <rogue/interfaces/stream/Buffer.h>
 #include <rogue/GeneralError.h>
+#include <rogue/Helpers.h>
 #include <memory>
 #include <rogue/GilRelease.h>
 #include <stdlib.h>
@@ -31,6 +32,7 @@ namespace rha = rogue::hardware::axi;
 namespace ris = rogue::interfaces::stream;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 #endif
@@ -47,6 +49,7 @@ rha::AxiStreamDma::AxiStreamDma ( std::string path, uint32_t dest, bool ssiEnabl
 
    dest_       = dest;
    enSsi_      = ssiEnable;
+   retThold_   = 1;
    zeroCopyEn_ = true;
 
    rogue::defaultTimeout(timeout_);
@@ -56,7 +59,7 @@ rha::AxiStreamDma::AxiStreamDma ( std::string path, uint32_t dest, bool ssiEnabl
    rogue::GilRelease noGil;
 
    if ( (fd_ = ::open(path.c_str(), O_RDWR)) < 0 )
-      throw(rogue::GeneralError::open("AxiStreamDma::AxiStreamDma",path.c_str()));
+      throw(rogue::GeneralError::create("AxiStreamDma::AxiStreamDma", "Failed to open device file: %s",path.c_str()));
 
    if ( dmaCheckVersion(fd_) < 0 )
       throw(rogue::GeneralError("AxiStreamDma::AxiStreamDma","Bad kernel driver version detected. Please re-compile kernel driver"));
@@ -66,7 +69,9 @@ rha::AxiStreamDma::AxiStreamDma ( std::string path, uint32_t dest, bool ssiEnabl
 
    if  ( dmaSetMaskBytes(fd_,mask) < 0 ) {
       ::close(fd_);
-      throw(rogue::GeneralError::dest("AxiStreamDma::AxiStreamDma",path.c_str(),dest_));
+      throw(rogue::GeneralError::create("AxiStreamDma::AxiStreamDma",
+            "Failed to open device file %s with dest 0x%x! Another process may already have it open!",path.c_str(),dest));
+
    }
 
    // Result may be that rawBuff_ = NULL
@@ -74,22 +79,37 @@ rha::AxiStreamDma::AxiStreamDma ( std::string path, uint32_t dest, bool ssiEnabl
    if ( rawBuff_ == NULL ) {
       throw(rogue::GeneralError("AxiStreamDma::AxiStreamDma","Failed to map dma buffers. Increase vm map limit: sysctl -w vm.max_map_count=262144"));
    }
+   //else if ( bCount_ >= 1000 ) retThold_ = 50;
+   else if ( bCount_ >= 1000 ) retThold_ = 80;
 
    // Start read thread
    threadEn_ = true;
    thread_ = new std::thread(&rha::AxiStreamDma::runThread, this);
+
+   // Set a thread name
+#ifndef __MACH__
+   pthread_setname_np( thread_->native_handle(), "AxiStreamDma" );
+#endif
 }
 
 //! Close the device
 rha::AxiStreamDma::~AxiStreamDma() {
-   rogue::GilRelease noGil;
+   this->stop();
+}
 
-   // Stop read thread
-   threadEn_ = false;
-   thread_->join();
+void rha::AxiStreamDma::stop() {
+  if (threadEn_) {
+    rogue::GilRelease noGil;
 
-   if ( rawBuff_ != NULL ) dmaUnMapDma(fd_, rawBuff_);
-   ::close(fd_);
+    // Stop read thread
+    threadEn_ = false;
+    thread_->join();
+
+    if ( rawBuff_ != NULL ) {
+      dmaUnMapDma(fd_, rawBuff_);
+    }
+    ::close(fd_);
+  }
 }
 
 //! Set timeout for frame transmits in microseconds
@@ -146,7 +166,7 @@ ris::FramePtr rha::AxiStreamDma::acceptReq ( uint32_t size, bool zeroCopyEn) {
       // Request may be serviced with multiple buffers
       while ( alloc < size ) {
 
-         // Keep trying since select call can fire 
+         // Keep trying since select call can fire
          // but getIndex fails because we did not win the buffer lock
          do {
 
@@ -158,7 +178,7 @@ ris::FramePtr rha::AxiStreamDma::acceptReq ( uint32_t size, bool zeroCopyEn) {
             tout = timeout_;
 
             if ( select(fd_+1,NULL,&fds,NULL,&tout) <= 0 ) {
-               log_->timeout("AxiStreamDma::acceptReq", timeout_);
+               log_->critical("AxiStreamDma::acceptReq: Timeout waiting for outbound buffer after %i.%i seconds! May be caused by outbound back pressure.", timeout_.tv_sec, timeout_.tv_usec);
                res = -1;
             }
             else {
@@ -192,6 +212,12 @@ void rha::AxiStreamDma::acceptFrame ( ris::FramePtr frame ) {
    rogue::GilRelease noGil;
    ris::FrameLockPtr lock = frame->lock();
    emptyFrame = false;
+
+   // Drop errored frames
+   if ( frame->getError() ) {
+      log_->warning("Dumping errored frame");
+      return;
+   }
 
    // Go through each (*it)er in the frame
    ris::Frame::BufferIterator it;
@@ -241,7 +267,7 @@ void rha::AxiStreamDma::acceptFrame ( ris::FramePtr frame ) {
       // Write to pgp with (*it)er copy in driver
       else {
 
-         // Keep trying since select call can fire 
+         // Keep trying since select call can fire
          // but write fails because we did not win the (*it)er lock
          do {
 
@@ -251,9 +277,9 @@ void rha::AxiStreamDma::acceptFrame ( ris::FramePtr frame ) {
 
             // Setup select timeout
             tout = timeout_;
-            
+
             if ( select(fd_+1,NULL,&fds,NULL,&tout) <= 0 ) {
-               log_->timeout("AxiStreamDma::acceptFrame", timeout_);
+               log_->critical("AxiStreamDma::acceptFrame: Timeout waiting for outbound write after %i.%i seconds! May be caused by outbound back pressure.", timeout_.tv_sec, timeout_.tv_usec);
                res = 0;
             }
             else {
@@ -275,6 +301,9 @@ void rha::AxiStreamDma::acceptFrame ( ris::FramePtr frame ) {
 //! Return a buffer
 void rha::AxiStreamDma::retBuffer(uint8_t * data, uint32_t meta, uint32_t size) {
    rogue::GilRelease noGil;
+   uint32_t ret[100];
+   uint32_t count;
+   uint32_t x;
 
    // Buffer is zero copy as indicated by bit 31
    if ( (meta & 0x80000000) != 0 ) {
@@ -282,10 +311,31 @@ void rha::AxiStreamDma::retBuffer(uint8_t * data, uint32_t meta, uint32_t size) 
       // Device is open and buffer is not stale
       // Bit 30 indicates buffer has already been returned to hardware
       if ( (fd_ >= 0) && ((meta & 0x40000000) == 0) ) {
-         if ( dmaRetIndex(fd_,meta & 0x3FFFFFFF) < 0 ) 
-            throw(rogue::GeneralError("AxiStreamDma::retBuffer","AXIS Return Buffer Call Failed!!!!"));
-      }
 
+#if 0
+         // Add to queue
+         printf("Adding to queue\n");
+         retQueue_.push(meta);
+
+         // Bulk return
+         if ( (count = retQueue_.size()) >= retThold_ ) {
+            printf("Return count=%i\n",count);
+            if ( count > 100 ) count = 100;
+            for (x=0; x < count; x++) ret[x] = retQueue_.pop() & 0x3FFFFFFF;
+
+            if ( dmaRetIndexes(fd_,count,ret) < 0 )
+               throw(rogue::GeneralError("AxiStreamDma::retBuffer","AXIS Return Buffer Call Failed!!!!"));
+
+            decCounter(size*count);
+            printf("Return done\n");
+         }
+
+#else
+         if ( dmaRetIndex(fd_,meta & 0x3FFFFFFF) < 0 )
+            throw(rogue::GeneralError("AxiStreamDma::retBuffer","AXIS Return Buffer Call Failed!!!!"));
+
+#endif
+      }
       decCounter(size);
    }
 
@@ -314,10 +364,11 @@ void rha::AxiStreamDma::runThread() {
    luser = 0;
    cont  = 0;
 
+   log_->logThreadId();
+   usleep(1000);
+
    // Preallocate empty frame
    frame = ris::Frame::create();
-
-   log_->logThreadId();
 
    while(threadEn_) {
 
@@ -351,15 +402,15 @@ void rha::AxiStreamDma::runThread() {
             rxCount = dmaReadBulkIndex(fd_, RxBufferCount, rxSize, meta, rxFlags, rxError, NULL);
 
             // Allocate a buffer, Mark zero copy meta with bit 31 set, lower bits are index
-            for (x=0; x < rxCount; x++) 
+            for (x=0; x < rxCount; x++)
                buff[x] = createBuffer(rawBuff_[meta[x]],0x80000000 | meta[x],bSize_,bSize_);
          }
 
          // Return of -1 is bad
-         if ( rxCount < 0 ) 
+         if ( rxCount < 0 )
             throw(rogue::GeneralError("AxiStreamDma::runThread","DMA Interface Failure!"));
 
-         // Read was successfull
+         // Read was successful
          for (x=0; x < rxCount; x++) {
 
             fuser = axisGetFuser(rxFlags[x]);

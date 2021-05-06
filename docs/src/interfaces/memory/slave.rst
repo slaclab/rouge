@@ -7,9 +7,9 @@ Memory Slave Example
 Unlike the :ref:`interfaces_memory_master_ex`, it is more common for the user to implement a custom
 memory Slave to interface with hardware that uses a proprietary protocol.
 
-Python and C++ subclasses of the Slave class can be used interchagably, allowing c++ subclasses 
+Python and C++ subclasses of the Slave class can be used interchangeably, allowing c++ subclasses 
 to service memory transactions from python masters and python subclasses to receive service
-memory transactions initated by c++ masters.
+memory transactions initiated by c++ masters.
 
 In the below example assume there is a a protocol that has the following functions to
 initiate a read and write transaction:
@@ -91,13 +91,13 @@ See :ref:`interfaces_memory_slave` for more detail on the Slave class.
                 if tran.expired():
                     return
 
-                # If an error occured, complete result with bus fail
+                # If an error occurred, complete result with bus fail
                 if not result:
-                    tran.done(rogue.interfaces.memory.BusFail)
+                    tran.error(f"Got a bad result: {result}")
                
                 # Otherwise complete transaction with success 
                 else: 
-                    tran.done(0)
+                    tran.done()
 
         # Protocol callback for read complete
         def protocolReadDone(self,id,data,result):
@@ -116,17 +116,17 @@ See :ref:`interfaces_memory_slave` for more detail on the Slave class.
                 if tran.expired():
                     return
 
-                # If an error occured, complete result with bus fail
+                # If an error occurred, complete result with bus fail
                 if not result:
-                    tran.done(rogue.interfaces.memory.BusFail)
+                    tran.error(f"Got a bad result: {result}")
                
                 # Otherwise set the read data back to the transaction
                 # and complete without error
                 else: 
                     tran.setData(data,0)
-                    tran.done(0)
+                    tran.done()
 
-The equivelent code in C++ is show below:
+The equivalent code in C++ is show below:
 
 .. code-block:: c
 
@@ -197,10 +197,10 @@ The equivelent code in C++ is show below:
             if ( tran->expired() ) return;
 
             // If an error occured, complete result with bus fail
-            if ( ! result ) tran->done(rogue::interfaces::memory::BusFail);
+            if ( ! result ) tran->error("Got a bad protocol result %i",result);
                
             // Otherwise complete transaction with success 
-            else tran->done(0);
+            else tran->done();
          }
 
          // Protocol callback for read complete
@@ -216,14 +216,14 @@ The equivelent code in C++ is show below:
             // make sure transaction is not stale
             if ( tran->expired() ) return;
 
-            // If an error occured, complete result with bus fail
-            if ( ! result ) tran->done(rogue::interfaces::memory::BusFail);
+            // If an error occurred, complete result with bus fail
+            if ( ! result ) tran->error("Got a bad protocol result %i",result);
                
             // Otherwise set the read data back to the transaction
             // and complete without error
             else {
                std::copy(data,data+tran->size(),tran->begin());
-               tran->done(0);
+               tran->done();
             }
          }
    };

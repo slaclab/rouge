@@ -1,5 +1,4 @@
 PyYAML
-jsonpickle
 parse
 click
 coverage
@@ -7,9 +6,15 @@ codecov
 pytest>=3.6
 pytest-cov
 pyepics
-doctr
 sphinx
 sphinx_rtd_theme
 sphinxcontrib-napoleon
 breathe
 pyzmq
+p4p
+sqlalchemy
+pyserial
+numpy
+flake8
+gitpython
+pygithub

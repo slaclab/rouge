@@ -1,27 +1,18 @@
-#!/usr/bin/env python
 #-----------------------------------------------------------------------------
 # Title      : PyRogue base module - Run Control Device Class
 #-----------------------------------------------------------------------------
-# File       : pyrogue/_RunControl.py
-# Created    : 2019-08-06
-#-----------------------------------------------------------------------------
-# This file is part of the rogue software platform. It is subject to 
-# the license terms in the LICENSE.txt file found in the top-level directory 
-# of this distribution and at: 
-#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
-# No part of the rogue software platform, including this file, may be 
-# copied, modified, propagated, or distributed except according to the terms 
+# This file is part of the rogue software platform. It is subject to
+# the license terms in the LICENSE.txt file found in the top-level directory
+# of this distribution and at:
+#    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+# No part of the rogue software platform, including this file, may be
+# copied, modified, propagated, or distributed except according to the terms
 # contained in the LICENSE.txt file.
 #-----------------------------------------------------------------------------
-import rogue.interfaces.memory as rim
-import collections
-import datetime
-import functools as ft
 import pyrogue as pr
-import inspect
 import threading
-import math
 import time
+
 
 class RunControl(pr.Device):
     """Special base class to control runs. """
@@ -70,8 +61,8 @@ class RunControl(pr.Device):
 
     def _setRunState(self,value,changed):
         """
-        Set run state. Reimplement in sub-class.
-        Enum of run states can also be overriden.
+        Set run state. Re-implement in sub-class.
+        Enum of run states can also be overridden.
         Underlying run control must update runCount variable.
         """
         if changed:
@@ -86,7 +77,7 @@ class RunControl(pr.Device):
 
     def _setRunRate(self,value):
         """
-        Set run rate. Reimplement in sub-class if neccessary.
+        Set run rate. Re-implement in sub-class if necessary.
         """
         pass
 
@@ -99,6 +90,5 @@ class RunControl(pr.Device):
             if self._cmd is not None:
                 self._cmd()
 
-            self.runCount.set(self.runCount.value() + 1,write=False)
-        #print("Thread stop")
-
+            with self.runCount.lock:
+                self.runCount.set(self.runCount.value() + 1,write=False)

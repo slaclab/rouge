@@ -8,12 +8,12 @@
  * Description:
  * Rogue stream master interface for EPICs variables
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -28,6 +28,7 @@
 namespace ris = rogue::interfaces::stream;
 namespace rpe = rogue::protocols::epicsV3;
 
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 
@@ -44,7 +45,7 @@ void rpe::Master::setup_python() {
 rpe::Master::Master (std::string epicsName, uint32_t max, std::string type) : Value(epicsName) {
 
    // Init gdd record
-   this->initGdd(type, false, 1);
+   this->initGdd(type, false, 1, false);
    max_ = max;
 
    // Determine size in bytes & init data
@@ -100,17 +101,19 @@ rpe::Master::Master (std::string epicsName, uint32_t max, std::string type) : Va
 
 rpe::Master::~Master() { }
 
-void rpe::Master::valueGet() { }
+bool rpe::Master::valueGet() { return true;}
 
-void rpe::Master::valueSet() {
+bool rpe::Master::valueSet() {
    ris::FramePtr frame;
-   ris::Frame::iterator iter;
+   ris::FrameIterator iter;
    uint32_t txSize;
    uint32_t i;
 
    txSize = size_ * fSize_;
    frame = reqFrame(txSize, true);
-   iter = frame->beginWrite();
+   frame->setPayload(txSize);
+
+   iter = frame->begin();
 
    // Create vector of appropriate type
    if ( epicsType_ == aitEnumUint8 ) {
@@ -162,7 +165,7 @@ void rpe::Master::valueSet() {
    }
 
    // Should this be pushed to a queue for a worker thread to call slaves?
-   frame->setPayload(txSize);
    sendFrame(frame);
+   return true;
 }
 

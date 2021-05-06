@@ -10,12 +10,12 @@
  *    The function calls in this are a mess! create buffer, allocate buffer, etc
  *    need to be reworked.
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -37,6 +37,7 @@
 namespace ris = rogue::interfaces::stream;
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 namespace bp  = boost::python;
 #endif
@@ -57,6 +58,9 @@ ris::Slave::Slave() {
 //! Destructor
 ris::Slave::~Slave() { }
 
+void ris::Slave::stop () {
+}
+
 //! Set debug message size
 void ris::Slave::setDebug(uint32_t debug, std::string name) {
    debug_ = debug;
@@ -65,7 +69,7 @@ void ris::Slave::setDebug(uint32_t debug, std::string name) {
 
 //! Accept a frame from master
 void ris::Slave::acceptFrame ( ris::FramePtr frame ) {
-   ris::Frame::iterator it;
+   ris::FrameIterator it;
 
    uint32_t count;
    uint8_t  val;
@@ -79,11 +83,11 @@ void ris::Slave::acceptFrame ( ris::FramePtr frame ) {
    if ( debug_ > 0 ) {
       char buffer[1000];
 
-      log_->critical("Got Size=%i, Data:",frame->getPayload());
+      log_->critical("Got Size=%i, Error=%i, Data:",frame->getPayload(),frame->getError());
       sprintf(buffer,"     ");
 
       count = 0;
-      for (it = frame->beginRead(); (count < debug_) && (it != frame->endRead()); ++it) {
+      for (it = frame->begin(); (count < debug_) && (it != frame->end()); ++it) {
          count++;
          val = *it;
 
@@ -142,15 +146,54 @@ void ris::Slave::setup_python() {
       .def("_acceptFrame",   &ris::Slave::acceptFrame, &ris::SlaveWrap::defAcceptFrame)
       .def("getFrameCount",  &ris::Slave::getFrameCount)
       .def("getByteCount",   &ris::Slave::getByteCount)
+      .def("_stop",          &ris::Slave::stop)
       .def("getAllocCount",  &ris::Pool::getAllocCount)
       .def("getAllocBytes",  &ris::Pool::getAllocBytes)
       .def("setFixedSize",   &ris::Pool::setFixedSize)
       .def("getFixedSize",   &ris::Pool::getFixedSize)
       .def("setPoolSize",    &ris::Pool::setPoolSize)
       .def("getPoolSize",    &ris::Pool::getPoolSize)
+      .def("__lshift__",     &ris::Slave::lshiftPy)
    ;
 
    bp::implicitly_convertible<ris::SlavePtr, ris::PoolPtr>();
 #endif
+}
+
+
+#ifndef NO_PYTHON
+
+// Support << operator in python
+bp::object ris::Slave::lshiftPy ( bp::object p ) {
+   ris::MasterPtr mst;
+
+   // First Attempt to access object as a stream master
+   boost::python::extract<ris::MasterPtr> get_master(p);
+
+   // Test extraction
+   if ( get_master.check() ) mst = get_master();
+
+   // Otherwise look for indirect call
+   else if ( PyObject_HasAttrString(p.ptr(), "_getStreamMaster" ) ) {
+
+      // Attempt to convert returned object to master pointer
+      boost::python::extract<ris::MasterPtr> get_master(p.attr("_getStreamMaster")());
+
+      // Test extraction
+      if ( get_master.check() ) mst = get_master();
+   }
+
+   if ( mst != NULL ) mst->addSlave(rogue::EnableSharedFromThis<ris::Slave>::shared_from_this());
+   else throw(rogue::GeneralError::create("stream::Slave::lshiftPy","Attempt to use << with incompatable stream master"));
+
+   return p;
+}
+
+#endif
+
+//! Support << operator in C++
+ris::MasterPtr & ris::Slave::operator <<(ris::MasterPtr & other) {
+   other->addSlave(rogue::EnableSharedFromThis<ris::Slave>::shared_from_this());
+   return other;
 }
 

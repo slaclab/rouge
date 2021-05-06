@@ -8,12 +8,12 @@
  * Description:
  * General exception for Rogue
  * ----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
- *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+ *    https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  * ----------------------------------------------------------------------------
 **/
@@ -24,10 +24,9 @@
 #include <string>
 
 #ifndef NO_PYTHON
+#define BOOST_BIND_GLOBAL_PLACEHOLDERS
 #include <boost/python.hpp>
 #endif
-
-#define DEFAULT_TIMEOUT 1000000
 
 namespace rogue {
 
@@ -35,10 +34,7 @@ namespace rogue {
    extern PyObject * generalErrorObj;
 #endif
 
-   // Set default timeout value
-   void defaultTimeout(struct timeval &tout);
-
-   //! General exception 
+   //! General exception
    /*
     * Called for all general errors that should not occur
     * in the system.
@@ -53,14 +49,6 @@ namespace rogue {
          GeneralError (std::string src,std::string text);
 
          static GeneralError create(std::string src, const char * fmt, ...);
-         static GeneralError timeout(std::string src, struct timeval & tout);
-         static GeneralError timeout(std::string src, uint32_t tout);
-         static GeneralError open(std::string src, std::string file);
-         static GeneralError dest(std::string src, std::string file, uint32_t dest);
-         static GeneralError boundary(std::string src, uint32_t position, uint32_t limit);
-         static GeneralError allocation(std::string src, uint32_t size);
-         static GeneralError network(std::string src, std::string host, uint16_t port);
-         static GeneralError ret(std::string src, std::string text, int32_t ret);
 
          char const * what() const throw();
          static void setup_python();

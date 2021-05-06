@@ -1,21 +1,16 @@
 /**
  *-----------------------------------------------------------------------------
  * Title         : PRBS Receive And Transmit Class
- * ----------------------------------------------------------------------------
- * File          : Prbs.h
- * Author        : Ryan Herbst <rherbst@slac.stanford.edu>
- * Created       : 09/17/2016
- * Last update   : 09/17/2016
  *-----------------------------------------------------------------------------
  * Description :
  *    Class used to generate and receive PRBS test data.
  *-----------------------------------------------------------------------------
- * This file is part of the rogue software platform. It is subject to 
- * the license terms in the LICENSE.txt file found in the top-level directory 
- * of this distribution and at: 
-    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html. 
- * No part of the rogue software platform, including this file, may be 
- * copied, modified, propagated, or distributed except according to the terms 
+ * This file is part of the rogue software platform. It is subject to
+ * the license terms in the LICENSE.txt file found in the top-level directory
+ * of this distribution and at:
+    * https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html.
+ * No part of the rogue software platform, including this file, may be
+ * copied, modified, propagated, or distributed except according to the terms
  * contained in the LICENSE.txt file.
  *-----------------------------------------------------------------------------
 **/
@@ -31,13 +26,13 @@ namespace rogue {
 
       //! PRBS master / slave class
       /*
-       * Engine can be used as either a master or slave. 
+       * Engine can be used as either a master or slave.
        * Internal thread can en enabled for auto frame generation
        */
       class Prbs : public rogue::interfaces::stream::Slave, public rogue::interfaces::stream::Master {
 
             //! Max size
-            const static uint32_t MaxBytes = 32;
+            const static uint32_t MaxBytes = 64;
 
             //! PRBS taps
             uint8_t  * taps_;
@@ -93,6 +88,9 @@ namespace rogue {
             //! Send count
             bool       sendCount_;
 
+            //! Receive enable
+            bool       rxEnable_;
+
             // Stats
             uint32_t lastRxCount_;
             uint32_t lastRxBytes_;
@@ -114,7 +112,7 @@ namespace rogue {
             std::thread* txThread_;
             bool threadEn_;
 
-            //! Internal computation 
+            //! Internal computation
             void flfsr(uint8_t * data);
 
             //! Thread background
@@ -159,6 +157,12 @@ namespace rogue {
             //! Disable auto generation
             void disable();
 
+            //! Get rx enable
+            bool getRxEnable();
+
+            //! Set rx enable
+            void setRxEnable(bool);
+
             //! Get rx errors
             uint32_t getRxErrors();
 
@@ -202,7 +206,7 @@ namespace rogue {
             void acceptFrame ( std::shared_ptr<rogue::interfaces::stream::Frame> frame );
       };
 
-      // Convienence
+      // Convenience
       typedef std::shared_ptr<rogue::utilities::Prbs> PrbsPtr;
 
    }
